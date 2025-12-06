@@ -7,7 +7,7 @@ import hashlib
 import datetime, time
 from json import JSONDecoder, JSONEncoder, dump, load
 
-valid_actions = ('add', 'move', 'update', 'remove')
+valid_actions = ('move', 'add', 'update', 'remove')
 
 
 def md5_checksum(file_path):
@@ -37,7 +37,6 @@ def is_cache_stale(cache_file_path):
     age = now - ctime
     if age.seconds > 3600:
         print(f"Warning: cache {cache_file_path} is {age.seconds / 60} minutes old")
-        print(f"Consider removing file {cache_file_path}")
         return True
     return False
         
@@ -55,7 +54,8 @@ def read_from_cache(dir_path, cache_file_path):
 def save_to_cache(dir_path, cache_file_path, dir_files):
         print(f"Saving {dir_path} infos to cache {cache_file_path}")
         with open(cache_file_path, 'w', encoding='utf-8') as f:
-            dump(JSONEncoder().encode(dir_files), f, ensure_ascii=False, indent=4)
+            serialized = {str(k) : dict(path=str(v['path']),size=v['size'],md5=v['md5']) for k, v in dir_files.items()}
+            dump(JSONEncoder().encode(serialized), f, ensure_ascii=False, indent=4)
  
   
 def remove_cache(dir_path):
@@ -74,15 +74,15 @@ def get_files(dir_path):
          print(f"Scanning all files in {dir_path} for infos...")   
          for i,p in enumerate(Path(dir_path).rglob("*.*")):
             if p.is_file() and not 'listes' in p.parts:
-                dir_files[str(os.fspath(p).replace(dir_path, ''))] = dict(path=str(p), size=os.stat(p).st_size, md5=md5_partial_checksum(p))
+                dir_files[os.fspath(p).replace(dir_path, '')] = dict(path=p, size=os.stat(p).st_size, md5=md5_partial_checksum(p))
                 if (i == feedback_every or i % feedback_every == 0):
                      sys.stdout.write(f"\r{i}")
          sys.stdout.write(f"\r{i} files scanned")       
          sys.stdout.flush()
          print()
-           
-    if not cache_file_path.is_file():
-        save_to_cache(dir_path, cache_file_path, dir_files)
+         save_to_cache(dir_path, cache_file_path, dir_files)
+         dir_files = read_from_cache(dir_path, cache_file_path)
+        
     return dir_files
 
 
@@ -196,6 +196,10 @@ def update(changed, confirm):
         try:
             source = changed[k][0]['path']
             destination = changed[k][1]['path']
+            if  changed[k][0]['size'] != changed[k][1]['size']:
+                print(f"# size changed: {changed[k][0]['size']} -> {changed[k][1]['size']}")
+            if  changed[k][0]['md5'] != changed[k][1]['md5']:
+                print(f"# md5 changed: {changed[k][0]['md5']} -> {changed[k][1]['md5']}")
             print(f"cp \"{source}\" \"{destination}\"")
             if confirm is not None:
                 make_dest_directory("/".join(destination.parts[0:-1]))
@@ -260,15 +264,15 @@ if __name__ == '__main__':
         if action == 'move':
             move(moved, dir_one_path, dir_two_path, confirm)
             cleanup_empty_dirs(dir_two_path, confirm)	
-
-        if action == 'remove':
+        
+        elif action == 'remove':
             remove(removed, confirm)
             cleanup_empty_dirs(dir_two_path, confirm)	
-
-        if action == 'add':
+        
+        elif action == 'add':
             add(added, dir_one_path, dir_two_path, confirm)
-
-        if action == 'update':
+        
+        elif action == 'update':
             update(changed, confirm)
             
         if confirm is not None:
