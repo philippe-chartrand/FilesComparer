@@ -7,8 +7,12 @@ import hashlib
 import datetime, time
 from json import JSONDecoder, JSONEncoder, dump, load
 
-valid_actions = ('move', 'add', 'update', 'remove')
+valid_actions = ('move', 'add', 'update', 'remove', 'cleanup')
 
+
+def remove_trailing_slash(str):
+    return str[0:-1] if str.endswith('/') else str
+    
 
 def md5_checksum(file_path):
     hasher = hashlib.md5()
@@ -235,8 +239,8 @@ def find_moved(removed, added):
 
 if __name__ == '__main__':
     print('Valid actions: ', valid_actions,"\n")
-    dir_one_path = sys.argv[1]
-    dir_two_path = sys.argv[2]
+    dir_one_path = remove_trailing_slash(sys.argv[1])
+    dir_two_path = remove_trailing_slash(sys.argv[2])
     action = sys.argv[3] if len(sys.argv)> 3 else None
     confirm = sys.argv[4] if len(sys.argv)> 4 else None
 
@@ -274,6 +278,10 @@ if __name__ == '__main__':
         
         elif action == 'update':
             update(changed, confirm)
+        
+        elif action == 'cleanup':
+            remove_cache(dir_one_path)
+            remove_cache(dir_two_path)
             
         if confirm is not None:
             remove_cache(dir_two_path)
