@@ -7,8 +7,27 @@ import hashlib
 import datetime, time
 from json import JSONDecoder, JSONEncoder, dump, load
 
-valid_actions = ('move', 'add', 'update', 'remove', 'cleanup')
 
+MD5_CHUNK_SIZE = 1048576
+MD5_SAMPLE_SIZE = 262144
+CACHE_MAX_AGE = 5400
+
+valid_actions = ('help', 'move', 'add', 'update', 'restore', 'remove', 'cleanup')
+
+help_text = """
+Compare content of a source and a destination directory, and provide actions to update destination.
+
+actions
+=======
+
+help: show this text
+move: move files inside destination according to changes in source
+add: copy files from source to destination when not found in destination
+update: copy files from source to destination when modified in source later than in destination
+restore: restore files from destination back to source when modified in destination later than in source
+remove: remove files from destination when not found in source
+cleanup: remove cache files for source and destination
+"""
 
 def remove_trailing_slash(str):
     return str[0:-1] if str.endswith('/') else str
@@ -17,7 +36,7 @@ def remove_trailing_slash(str):
 def md5_checksum(file_path):
     hasher = hashlib.md5()
     with open(file_path, 'rb') as f:
-        for chunk in iter(lambda: f.read(1048576), b''):
+        for chunk in iter(lambda: f.read(MD5_CHUNK_SIZE), b''):
             hasher.update(chunk)
     return hasher.hexdigest()
 
@@ -25,7 +44,7 @@ def md5_checksum(file_path):
 def md5_partial_checksum(file_path):
     hasher = hashlib.md5()
     with open(file_path, 'rb') as f:
-        hasher.update(f.read(262144))
+        hasher.update(f.read(MD5_SAMPLE_SIZE))
     return hasher.hexdigest()
 
 
@@ -39,8 +58,8 @@ def is_cache_stale(cache_file_path):
     ctime = datetime.datetime.fromtimestamp(os.stat(cache_file_path).st_ctime)
     now = datetime.datetime.now()
     age = now - ctime
-    if age.seconds > 3600:
-        print(f"Warning: cache {cache_file_path} is {age.seconds / 60} minutes old")
+    if age.seconds > CACHE_MAX_AGE:
+        print(f"Warning: cache {cache_file_path} is {age.seconds / 60} minutes old, removing.")
         return True
     return False
         
@@ -50,7 +69,7 @@ def read_from_cache(dir_path, cache_file_path):
     print(f"Reading {dir_path} infos from cache {cache_file_path}")
     with open(cache_file_path, 'r', encoding='utf-8') as f:
         dir_files = {
-        	Path(k) : dict(path=Path(v['path']),size=v['size'],md5=v['md5'])  for k,v in JSONDecoder().decode(load(f)).items()
+            Path(k) : dict(path=Path(v['path']),size=v['size'],md5=v['md5'],mtime=v['mtime'])  for k,v in JSONDecoder().decode(load(f)).items()
         }   
     return dir_files
 
@@ -58,7 +77,7 @@ def read_from_cache(dir_path, cache_file_path):
 def save_to_cache(dir_path, cache_file_path, dir_files):
         print(f"Saving {dir_path} infos to cache {cache_file_path}")
         with open(cache_file_path, 'w', encoding='utf-8') as f:
-            serialized = {str(k) : dict(path=str(v['path']),size=v['size'],md5=v['md5']) for k, v in dir_files.items()}
+            serialized = {str(k) : dict(path=str(v['path']),size=v['size'],md5=v['md5'],mtime=v['mtime']) for k, v in dir_files.items()}
             dump(JSONEncoder().encode(serialized), f, ensure_ascii=False, indent=4)
  
   
@@ -78,7 +97,7 @@ def get_files(dir_path):
          print(f"Scanning all files in {dir_path} for infos...")   
          for i,p in enumerate(Path(dir_path).rglob("*.*")):
             if p.is_file() and not 'listes' in p.parts:
-                dir_files[os.fspath(p).replace(dir_path, '')] = dict(path=p, size=os.stat(p).st_size, md5=md5_partial_checksum(p))
+                dir_files[os.fspath(p).replace(dir_path, '')] = dict(path=p, size=os.stat(p).st_size, md5=md5_partial_checksum(p),mtime=os.stat(p).st_mtime)
                 if (i == feedback_every or i % feedback_every == 0):
                      sys.stdout.write(f"\r{i}")
          sys.stdout.write(f"\r{i} files scanned")       
@@ -101,15 +120,19 @@ def intersection (dir_one, dir_two):
 
 
 def modified(common):
-    changed = {}
+    changed_in_dir_one = {}
+    changed_in_dir_two = {}
     unchanged = {}
     for k in common.keys():
         first, second = common[k][0], common[k][1]
-        if first['md5'] != second['md5']: #        if first['size'] != second['size']:
-            changed[k] = [first,second]
+        if first['md5'] != second['md5']: 
+            if first['mtime'] > second['mtime']:
+                changed_in_dir_one[k] = [first,second]
+            elif first['mtime'] < second['mtime']:
+                changed_in_dir_two[k] = [first,second]
         else:
             unchanged[k] = [first,second]
-    return changed, unchanged
+    return changed_in_dir_one, changed_in_dir_two, unchanged
 
 
 def remove(deleted,confirm):
@@ -200,16 +223,38 @@ def update(changed, confirm):
         try:
             source = changed[k][0]['path']
             destination = changed[k][1]['path']
+            if  changed[k][0]['mtime'] != changed[k][1]['mtime']:
+                print(f"# changed: {datetime.datetime.fromtimestamp(changed[k][0]['mtime'])} > {datetime.datetime.fromtimestamp(changed[k][1]['mtime'])}")
             if  changed[k][0]['size'] != changed[k][1]['size']:
-                print(f"# size changed: {changed[k][0]['size']} -> {changed[k][1]['size']}")
+                print(f"# size: {changed[k][0]['size']} -> {changed[k][1]['size']}")
             if  changed[k][0]['md5'] != changed[k][1]['md5']:
-                print(f"# md5 changed: {changed[k][0]['md5']} -> {changed[k][1]['md5']}")
+                print(f"# md5: {changed[k][0]['md5']} -> {changed[k][1]['md5']}")
             print(f"cp \"{source}\" \"{destination}\"")
             if confirm is not None:
                 make_dest_directory("/".join(destination.parts[0:-1]))
                 shutil.copyfile(source,destination)
         except:
             print("failed to update", d[0].encode('utf-8', 'surrogateescape'))
+            pass
+
+
+def restore(changed, confirm):
+    for k in sorted(changed.keys()):
+        try:
+            source = changed[k][0]['path']
+            destination = changed[k][1]['path']
+            if  changed[k][0]['mtime'] != changed[k][1]['mtime']:
+                print(f"#  changed: {datetime.datetime.fromtimestamp(changed[k][0]['mtime'])} < {datetime.datetime.fromtimestamp(changed[k][1]['mtime'])}")
+            if  changed[k][0]['size'] != changed[k][1]['size']:
+                print(f"# size: {changed[k][0]['size']} -> {changed[k][1]['size']}")
+            if  changed[k][0]['md5'] != changed[k][1]['md5']:
+                print(f"# md5: {changed[k][0]['md5']} -> {changed[k][1]['md5']}")
+            print(f"cp \"{destination}\" \"{source}\"")
+            if confirm is not None:
+                make_dest_directory("/".join(source.parts[0:-1]))
+                shutil.copyfile(destination, source)
+        except:
+            print("failed to restore", d[1].encode('utf-8', 'surrogateescape'))
             pass
 
 
@@ -244,6 +289,10 @@ if __name__ == '__main__':
     action = sys.argv[3] if len(sys.argv)> 3 else None
     confirm = sys.argv[4] if len(sys.argv)> 4 else None
 
+    if action == 'help':
+        print(help_text);
+        sys.exit(1)
+            
     dir_one = get_files(dir_one_path)
     print('dir_one:', len(dir_one), sum_mb(dir_one))
     dir_two = get_files(dir_two_path)
@@ -254,34 +303,43 @@ if __name__ == '__main__':
     moved = find_moved(removed, added)
 
     common = intersection(dir_one, dir_two)
-    changed, unchanged = modified(common)
+    changed_in_one, changed_in_two, unchanged = modified(common)
 
     print('unchanged:',len(unchanged), sum_mb(choose_first(unchanged)))
     print('added:', len(added), sum_mb(added))
     print('moved:', len(moved), sum_mb(choose_first(moved)))
-    print('modified:',len(changed), sum_mb(choose_first(changed)))
+    print('changed in source:',len(changed_in_one), sum_mb(choose_first(changed_in_one)))
+    print('changed in destination:',len(changed_in_two), sum_mb(choose_first(changed_in_two)))
     print('removed:', len(removed), sum_mb(removed),"\n")
 
     print('action:', action)
     if action is not None:
         assert action in valid_actions
+            
         if action == 'move':
             move(moved, dir_one_path, dir_two_path, confirm)
-            cleanup_empty_dirs(dir_two_path, confirm)	
+            cleanup_empty_dirs(dir_two_path, confirm)    
         
         elif action == 'remove':
             remove(removed, confirm)
-            cleanup_empty_dirs(dir_two_path, confirm)	
+            cleanup_empty_dirs(dir_two_path, confirm)    
         
         elif action == 'add':
             add(added, dir_one_path, dir_two_path, confirm)
         
         elif action == 'update':
-            update(changed, confirm)
+            update(changed_in_one, confirm)
         
+        elif action == 'restore':
+            restore(changed_in_two, confirm)
+            
         elif action == 'cleanup':
             remove_cache(dir_one_path)
             remove_cache(dir_two_path)
             
         if confirm is not None:
-            remove_cache(dir_two_path)
+            if action == 'restore':
+                remove_cache(dir_one_path)
+            else:
+                remove_cache(dir_two_path)
+
