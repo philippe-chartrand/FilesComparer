@@ -193,13 +193,17 @@ def move(moved, dir_one_path, dir_two_path, dir_two, confirm):
             new_path = dir_two_path + '/' + remove_prefix(d2['path'], dir_one_path)
             partial_dest = make_partial_dest(d2['path'], dir_one_path)
             dest_dir = dir_two_path + partial_dest
-            print(f"mv \"{old_path}\" \"{new_path}\"")
-            if confirm is not None:
-                make_dest_directory(dest_dir)
-                shutil.move(old_path, new_path)
-                new_key = remove_prefix(d2['path'], dir_one_path)
-                dir_two[new_key] = dir_two[k]
-                del dir_two[k]
+            if old_path != new_path:
+                print(f"mv \"{old_path}\" \"{new_path}\"")
+                if confirm is not None:
+                    make_dest_directory(dest_dir)
+                    shutil.move(old_path, new_path)
+                    new_key = "/" + remove_prefix(d2['path'], dir_one_path)
+                    dir_two[new_key] = dir_two[k].copy()
+                    dir_two[new_key]['path'] = Path(new_path)
+                    del dir_two[k]
+            else:
+                print(f"moving {old_path} on {new_path} is useless.")
         except:
             print("Failed to move",d1['path'].__str__().encode('utf-8', 'surrogateescape'))
             pass
@@ -245,7 +249,6 @@ def update(changed, dir_two, confirm):
                 shutil.copyfile(source,destination)
                 dir_two[k]['mtime'] = changed[k][0]['mtime']
                 dir_two[k]['md5'] = changed[k][0]['md5']
-                dir_two
         except:
             print("failed to update", d[0].encode('utf-8', 'surrogateescape'))
             pass
@@ -287,11 +290,12 @@ def find_moved(removed, added):
     moved = {}
     for previous_file in removed.copy():
         for new_file in added.copy():
-            if previous_file in removed and new_file in added:
-                if removed[previous_file]['md5'] == added[new_file]['md5']:
-                    moved[previous_file] = [removed[previous_file], added[new_file]]
-                    del removed[previous_file]
-                    del added[new_file]
+            if previous_file != new_file:
+                if previous_file in removed and new_file in added:
+                    if removed[previous_file]['md5'] == added[new_file]['md5']:
+                        moved[previous_file] = [removed[previous_file], added[new_file]]
+                        del removed[previous_file]
+                        del added[new_file]
     return moved
 
 
