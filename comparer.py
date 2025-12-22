@@ -54,14 +54,14 @@ def calc_cache_file_path(dir_path):
     return cache_file_path
 
 
-def is_cache_stale(cache_file_path):    
+def exit_if_cache_stale(cache_file_path):    
     ctime = datetime.datetime.fromtimestamp(os.stat(cache_file_path).st_ctime)
     now = datetime.datetime.now()
     age = now - ctime
     if age.seconds > CACHE_MAX_AGE:
-        print(f"Warning: cache {cache_file_path} is {age.seconds / 60} minutes old, removing.")
-        return True
-    return False
+        print(f"Warning: cache {cache_file_path} is {age.seconds / 60} minutes old, which is more than expected.")
+        print(f"Remove or touch {cache_file_path}.")
+        sys.exit()
         
     
 def read_from_cache(dir_path, cache_file_path):
@@ -79,7 +79,11 @@ def save_to_cache(dir_path, cache_file_path, dir_files):
         with open(cache_file_path, 'w', encoding='utf-8') as f:
             serialized = {str(k) : dict(path=str(v['path']),size=v['size'],md5=v['md5'],mtime=v['mtime']) for k, v in dir_files.items()}
             dump(JSONEncoder().encode(serialized), f, ensure_ascii=False, indent=4)
- 
+
+
+def update_cache(dir_path, dir_data):
+    save_to_cache(dir_path, calc_cache_file_path(dir_path), dir_data)
+
   
 def remove_cache(dir_path):
     cache_file_path = calc_cache_file_path(dir_path)
@@ -91,7 +95,8 @@ def get_files(dir_path):
     cache_file_path = calc_cache_file_path(dir_path)
     dir_files = {}
     feedback_every = 100
-    if cache_file_path.is_file() and not is_cache_stale(cache_file_path):
+    if cache_file_path.is_file():
+        exit_if_cache_stale(cache_file_path);
         dir_files = read_from_cache(dir_path, cache_file_path)
     else:
          print(f"Scanning all files in {dir_path} for infos...")   
@@ -135,13 +140,14 @@ def modified(common):
     return changed_in_dir_one, changed_in_dir_two, unchanged
 
 
-def remove(deleted,confirm):
+def remove(deleted, dir_two, confirm):
     for k in sorted(deleted.keys()):
         d=deleted[k]
         try:
             print(f"rm \"{d['path']}\"")
             if confirm is not None:
                 os.unlink(d['path'])
+                del dir_two[k]
         except:
             print("Failed to unlink",d['path'].encode('utf-8', 'surrogateescape'))
             pass
@@ -178,7 +184,7 @@ def cleanup_empty_dirs(path, confirm):
                 pass
 
 
-def move(moved, dir_one_path, dir_two_path, confirm):
+def move(moved, dir_one_path, dir_two_path, dir_two, confirm):
     for k in sorted(moved.keys()):
         d1 = moved[k][0]
         d2 = moved[k][1]
@@ -191,7 +197,9 @@ def move(moved, dir_one_path, dir_two_path, confirm):
             if confirm is not None:
                 make_dest_directory(dest_dir)
                 shutil.move(old_path, new_path)
-
+                new_key = remove_prefix(d2['path'], dir_one_path)
+                dir_two[new_key] = dir_two[k]
+                del dir_two[k]
         except:
             print("Failed to move",d1['path'].__str__().encode('utf-8', 'surrogateescape'))
             pass
@@ -202,7 +210,7 @@ def make_partial_dest(posix_path, dir_path):
     return partial.removeprefix('/' + dir_path)
 
 
-def add(to_add, dir_one_path, dir_two_path, confirm):
+def add(to_add, dir_one_path, dir_two_path, dir_two, confirm):
     for k in sorted(to_add):
         try:
             d=to_add[k]
@@ -212,27 +220,32 @@ def add(to_add, dir_one_path, dir_two_path, confirm):
             if confirm is not None:
                 make_dest_directory(dest_dir)
                 shutil.copy2(d['path'], dest_dir)
+                dir_two[k] = d.copy()
+                dir_two[k]['path'] = Path(f"{dest_dir}/{k}")
 
         except:
             print("failed to copy", k.encode('utf-8', 'surrogateescape'))
             pass
 
 
-def update(changed, confirm):
+def update(changed, dir_two, confirm):
     for k in sorted(changed.keys()):
         try:
             source = changed[k][0]['path']
             destination = changed[k][1]['path']
             if  changed[k][0]['mtime'] != changed[k][1]['mtime']:
-                print(f"# changed: {datetime.datetime.fromtimestamp(changed[k][0]['mtime'])} > {datetime.datetime.fromtimestamp(changed[k][1]['mtime'])}")
+                print(f"# changed: {datetime.datetime.fromtimestamp(changed[k][0]['mtime'])} != {datetime.datetime.fromtimestamp(changed[k][1]['mtime'])}")
             if  changed[k][0]['size'] != changed[k][1]['size']:
-                print(f"# size: {changed[k][0]['size']} -> {changed[k][1]['size']}")
+                print(f"# size: {changed[k][0]['size']} != {changed[k][1]['size']}")
             if  changed[k][0]['md5'] != changed[k][1]['md5']:
-                print(f"# md5: {changed[k][0]['md5']} -> {changed[k][1]['md5']}")
+                print(f"# md5: {changed[k][0]['md5']} != {changed[k][1]['md5']}")
             print(f"cp \"{source}\" \"{destination}\"")
             if confirm is not None:
                 make_dest_directory("/".join(destination.parts[0:-1]))
                 shutil.copyfile(source,destination)
+                dir_two[k]['mtime'] = changed[k][0]['mtime']
+                dir_two[k]['md5'] = changed[k][0]['md5']
+                dir_two
         except:
             print("failed to update", d[0].encode('utf-8', 'surrogateescape'))
             pass
@@ -244,11 +257,11 @@ def restore(changed, confirm):
             source = changed[k][0]['path']
             destination = changed[k][1]['path']
             if  changed[k][0]['mtime'] != changed[k][1]['mtime']:
-                print(f"#  changed: {datetime.datetime.fromtimestamp(changed[k][0]['mtime'])} < {datetime.datetime.fromtimestamp(changed[k][1]['mtime'])}")
+                print(f"# changed: {datetime.datetime.fromtimestamp(changed[k][0]['mtime'])} != {datetime.datetime.fromtimestamp(changed[k][1]['mtime'])}")
             if  changed[k][0]['size'] != changed[k][1]['size']:
-                print(f"# size: {changed[k][0]['size']} -> {changed[k][1]['size']}")
+                print(f"# size: {changed[k][0]['size']} != {changed[k][1]['size']}")
             if  changed[k][0]['md5'] != changed[k][1]['md5']:
-                print(f"# md5: {changed[k][0]['md5']} -> {changed[k][1]['md5']}")
+                print(f"# md5: {changed[k][0]['md5']} != {changed[k][1]['md5']}")
             print(f"cp \"{destination}\" \"{source}\"")
             if confirm is not None:
                 make_dest_directory("/".join(source.parts[0:-1]))
@@ -317,18 +330,26 @@ if __name__ == '__main__':
         assert action in valid_actions
             
         if action == 'move':
-            move(moved, dir_one_path, dir_two_path, confirm)
-            cleanup_empty_dirs(dir_two_path, confirm)    
+            move(moved, dir_one_path, dir_two_path, dir_two, confirm)
+            cleanup_empty_dirs(dir_two_path, confirm)
+            if confirm is not None:
+                update_cache(dir_two_path, dir_two)
         
         elif action == 'remove':
-            remove(removed, confirm)
-            cleanup_empty_dirs(dir_two_path, confirm)    
+            remove(removed, dir_two, confirm)
+            cleanup_empty_dirs(dir_two_path, confirm)
+            if confirm is not None:
+                update_cache(dir_two_path, dir_two)
         
         elif action == 'add':
-            add(added, dir_one_path, dir_two_path, confirm)
+            add(added, dir_one_path, dir_two_path, dir_two, confirm)
+            if confirm is not None:
+                update_cache(dir_two_path, dir_two)
         
         elif action == 'update':
-            update(changed_in_one, confirm)
+            update(changed_in_one, dir_two, confirm)
+            if confirm is not None:
+                update_cache(dir_two_path, dir_two)
         
         elif action == 'restore':
             restore(changed_in_two, confirm)
@@ -341,5 +362,6 @@ if __name__ == '__main__':
             if action == 'restore':
                 remove_cache(dir_one_path)
             else:
-                remove_cache(dir_two_path)
+                if action not in ('add', 'remove', 'move', 'update'):
+                    remove_cache(dir_two_path)
 
