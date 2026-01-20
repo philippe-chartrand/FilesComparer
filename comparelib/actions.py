@@ -81,7 +81,7 @@ def update(changed, dir_two, confirm):
                 dir_two[k]['mtime'] = changed[k][0]['mtime']
                 dir_two[k]['md5'] = changed[k][0]['md5']
         except:
-            print("failed to update", d[0].encode('utf-8', 'surrogateescape'))
+            print("failed to update", k.encode('utf-8', 'surrogateescape'))
             pass
 
 
@@ -102,7 +102,7 @@ def restore(changed, confirm):
                 make_dest_directory("/".join(source.parts[0:-1]))
                 shutil.copyfile(destination, source)
         except:
-            print("failed to restore", d[1].encode('utf-8', 'surrogateescape'))
+            print("failed to restore", k.encode('utf-8', 'surrogateescape'))
             pass
 
 

@@ -79,6 +79,8 @@ class FileChooserWindow(Gtk.Window):
         remove_btn.connect("clicked", self.on_remove_btn_clicked)
 
         cleanup_btn = Gtk.Button(label='cleanup')
+        cleanup_btn.connect("clicked", self.on_cleanup_btn_clicked)
+
         quit_btn = Gtk.Button(label='Quit')
         quit_btn.connect("clicked", Gtk.main_quit)
 
@@ -157,6 +159,8 @@ class FileChooserWindow(Gtk.Window):
     def on_simulate_button_toggled(self, button, name):
         if button.get_active():
             self.confirm = None
+            print("Actions are simulated")
+
         else:
             self.confirm = True
             print("Actions are effective")
@@ -239,41 +243,57 @@ cleanup: remove cache files for source and destination
         cleanup_empty_dirs(self.dir_two_path, self.confirm)
         if self.confirm is not None:
             update_cache(self.dir_two_path, self.dir_two)
+            self.index_destination()
 
     def on_add_btn_clicked(self, widget):
         add(self.added, self.dir_one_path, self.dir_two_path, self.dir_two, self.confirm)
         if self.confirm is not None:
             update_cache(self.dir_two_path, self.dir_two)
+            self.index_destination()
 
     def on_update_btn_clicked(self, widget):
         update(self.changed_in_one, self.dir_two, self.confirm)
         if self.confirm is not None:
             update_cache(self.dir_two_path, self.dir_two)
+            self.index_destination()
 
     def on_restore_btn_clicked(self, widget):
         restore(self.changed_in_two, self.confirm)
+        if self.confirm is not None:
+            update_cache(self.dir_one_path, self.dir_one)
+            self.index_source()
 
     def on_cleanup_btn_clicked(self, widget):
         remove_cache(self.dir_one_path)
         remove_cache(self.dir_two_path)
+        self.cleanup_stats()
+
 
     def on_remove_btn_clicked(self, widget):
         remove(self.removed, self.dir_two, self.confirm)
         cleanup_empty_dirs(self.dir_two_path, self.confirm)
         if self.confirm is not None:
             update_cache(self.dir_two_path, self.dir_two)
+            self.index_destination()
 
     def index(self):
         self.dir_one_path = self.source.get_text()
         self.dir_two_path = self.destination.get_text()
         print(f"indexing {self.source.get_text()} and {self.destination.get_text()}")
+        self.index_source()
+        self.index_destination()
+
+    def index_source(self):
+        self.dir_one_path = self.source.get_text()
         dir_one = get_files(self.dir_one_path)
         print('dir_one:', len(dir_one), sum_mb(dir_one))
         self.source_stats.set_text(f"{len(dir_one)} {sum_mb(dir_one)}")
+        self.dir_one = dir_one
+
+    def index_destination(self):
         dir_two = get_files(self.dir_two_path)
         print('dir_two:', len(dir_two), sum_mb(dir_two), "\n")
         self.dest_stats.set_text(f"{len(dir_two)} {sum_mb(dir_two)}")
-        self.dir_one = dir_one
         self.dir_two = dir_two
 
     def compare(self):
@@ -303,6 +323,15 @@ cleanup: remove cache files for source and destination
         print('removed:', len(self.removed), sum_mb(self.removed), "\n")
         self.removed_stats.set_text(f"{len(self.removed)} {sum_mb(self.removed)}")
 
+    def cleanup_stats(self):
+        self.source_stats.set_text('')
+        self.dest_stats.set_text('')
+        self.unchanged_stats.set_text('')
+        self.added_stats.set_text('')
+        self.moved_stats.set_text('')
+        self.changed_in_src_stats.set_text('')
+        self.changed_in_dest_stats.set_text('')
+        self.removed_stats.set_text('')
 
 win = FileChooserWindow()
 if sys.argv[1] is not None:
