@@ -56,6 +56,10 @@ class FileChooserWindow(Gtk.Window):
         self.unchanged = {}
 
         self.confirm = None
+        simulate = Gtk.CheckButton(label="Simulation")
+        simulate.connect("toggled", self.on_simulate_button_toggled, "1")
+        simulate.set_active(True)
+
         help_btn = Gtk.Button(label='help')
         help_btn.connect("clicked", self.on_help_btn_clicked)
 
@@ -137,7 +141,9 @@ class FileChooserWindow(Gtk.Window):
         grid.attach_next_to(removed_lbl, changed_in_dest_lbl,Gtk.PositionType.BOTTOM, 1, 2)
         grid.attach_next_to(self.removed_stats, removed_lbl,Gtk.PositionType.RIGHT, 1, 2)
 
-        grid.attach_next_to(help_btn, removed_lbl, Gtk.PositionType.BOTTOM, 1, 2)
+        grid.attach_next_to(simulate, removed_lbl, Gtk.PositionType.BOTTOM, 1, 2)
+        grid.attach_next_to(help_btn, simulate, Gtk.PositionType.BOTTOM, 1, 2)
+
         grid.attach_next_to(move_btn, help_btn,Gtk.PositionType.RIGHT, 1, 2)
         grid.attach_next_to(add_btn, move_btn,Gtk.PositionType.RIGHT, 1, 2)
         grid.attach_next_to(update_btn, add_btn,Gtk.PositionType.RIGHT, 1, 2)
@@ -147,6 +153,13 @@ class FileChooserWindow(Gtk.Window):
         grid.attach_next_to(quit_btn, cleanup_btn, Gtk.PositionType.BOTTOM, 1, 2)
 
         self.add(grid)
+
+    def on_simulate_button_toggled(self, button, name):
+        if button.get_active():
+            self.confirm = None
+        else:
+            self.confirm = True
+            print("Actions are effective")
 
     def on_help_btn_clicked(self, widget):
         help_text = """
@@ -273,7 +286,7 @@ cleanup: remove cache files for source and destination
         self.changed_in_one, self.changed_in_two, self.unchanged = modified(self.common)
 
         print('unchanged:', len(self.unchanged), sum_mb(choose_first(self.unchanged)))
-        self.unchanged_stats.set_text(f"{len(self.unchanged)} {sum_mb(self.unchanged)}")
+        self.unchanged_stats.set_text(f"{len(self.unchanged)} {sum_mb(choose_first(self.unchanged))}")
 
         print('added:', len(self.added), sum_mb(self.added))
         self.added_stats.set_text(f"{len(self.added)} {sum_mb(self.added)}")
