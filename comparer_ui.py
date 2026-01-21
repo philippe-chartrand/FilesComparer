@@ -340,9 +340,9 @@ cleanup: remove cache files for source and destination
 
 
 win = FileChooserWindow()
-if sys.argv[1] is not None:
+if len(sys.argv) > 1 and sys.argv[1] is not None:
     win.source.set_text(remove_trailing_slash(sys.argv[1]))
-if sys.argv[2] is not None:
+if len(sys.argv) > 2 and sys.argv[2] is not None:
     win.destination.set_text(remove_trailing_slash(sys.argv[2]))
 win.connect("destroy", Gtk.main_quit)
 win.show_all()

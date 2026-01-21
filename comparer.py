@@ -26,15 +26,15 @@ cleanup: remove cache files for source and destination
 
 
 if __name__ == '__main__':
-    print('Valid actions: ', valid_actions,"\n")
+    print(sys.argv[0], ": Valid actions: ", valid_actions,"\n")
+    if len(sys.argv) == 1 or sys.argv[1] == 'help':
+        print(help_text);
+        sys.exit(1)
+        
     dir_one_path = remove_trailing_slash(sys.argv[1])
     dir_two_path = remove_trailing_slash(sys.argv[2])
     action = sys.argv[3] if len(sys.argv)> 3 else None
-    confirm = sys.argv[4] if len(sys.argv)> 4 else None
-
-    if action == 'help':
-        print(help_text);
-        sys.exit(1)
+    confirm = sys.argv[4] if len(sys.argv)> 4 else None   
             
     dir_one = get_files(dir_one_path)
     print('dir_one:', len(dir_one), sum_mb(dir_one))
