@@ -165,15 +165,13 @@ class FileChooserWindow(Gtk.Window):
 
     def on_help_btn_clicked(self, widget):
         help_text = """
-Comparaison des fichiers entre deux répertoires appelés source et destination. Sert à s'assurer que la synchronisation entre les deux est complète.
-
 Identifie le nombre et la masse des fichiers communs, ajoutés, déplacés, modifiés (dans la source ou dans la destination) ou absents.
 
 Mode:
 -----
 L'application peut indiquer les actions qu'elle compte entreprendre sans les effectuer (mode Simulation des actions). 
 La sortie se trouve alors sur la console sous forme de script. C'est le comportement par défaut.
-Elle peut également exécuter les actions directement. (mode effectif).
+Elle peut également exécuter les actions directement. (mode effectif). Dans ce cas les indexs sont mis à jour en conséquence.
 
 Actions:
 --------
@@ -193,6 +191,8 @@ Mettre à jour: Mettre à jour depuis la source les fichiers se trouvant dans la
 Restaurer: Récupérer vers la source des fichiers modifiés dans la destination.
 
 Enlever: supprimer de la destination des fichiers ne se trouvant plus dans ls source.
+
+Quitter: quitter l'application.
         """
 
         dialog = Gtk.MessageDialog(
@@ -200,7 +200,7 @@ Enlever: supprimer de la destination des fichiers ne se trouvant plus dans ls so
             flags=0,
             message_type=Gtk.MessageType.INFO,
             buttons=Gtk.ButtonsType.OK,
-            text="Compare content of a source and a destination directory, and provide actions to update destination.",
+            text="Comparaison des fichiers entre deux répertoires appelés source et destination.\nSert à s'assurer que la synchronisation entre les deux est complète.",
         )
         dialog.format_secondary_text(
             help_text

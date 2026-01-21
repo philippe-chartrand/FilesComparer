@@ -61,6 +61,13 @@ def add(to_add, dir_one_path, dir_two_path, dir_two, confirm):
             print("failed to copy", k.encode('utf-8', 'surrogateescape'))
             pass
 
+def compare_mtimes(mtime1, mtime2):
+    if mtime1 > mtime2:
+        return ">"
+    elif mtime1 == mtime2:
+        return "="
+    elif mtime1 < mtime2:
+        return "<"
 
 def update(changed, dir_two, confirm):
     for k in sorted(changed.keys()):
@@ -68,8 +75,9 @@ def update(changed, dir_two, confirm):
             source = changed[k][0]['path']
             destination = changed[k][1]['path']
             if changed[k][0]['mtime'] != changed[k][1]['mtime']:
+                comparator = compare_mtimes(changed[k][0]['mtime'], changed[k][1]['mtime'])
                 print(
-                    f"# changed: {datetime.datetime.fromtimestamp(changed[k][0]['mtime'])} != {datetime.datetime.fromtimestamp(changed[k][1]['mtime'])}")
+                    f"# changed: {datetime.datetime.fromtimestamp(changed[k][0]['mtime'])} {comparator} {datetime.datetime.fromtimestamp(changed[k][1]['mtime'])}")
             if changed[k][0]['size'] != changed[k][1]['size']:
                 print(f"# size: {changed[k][0]['size']} != {changed[k][1]['size']}")
             if changed[k][0]['md5'] != changed[k][1]['md5']:
@@ -91,8 +99,9 @@ def restore(changed, dir_one, confirm):
             source = changed[k][0]['path']
             destination = changed[k][1]['path']
             if changed[k][0]['mtime'] != changed[k][1]['mtime']:
+                comparator = compare_mtimes(changed[k][0]['mtime'], changed[k][1]['mtime'])
                 print(
-                    f"# changed: {datetime.datetime.fromtimestamp(changed[k][0]['mtime'])} != {datetime.datetime.fromtimestamp(changed[k][1]['mtime'])}")
+                    f"# changed: {datetime.datetime.fromtimestamp(changed[k][0]['mtime'])} {comparator} {datetime.datetime.fromtimestamp(changed[k][1]['mtime'])}")
             if changed[k][0]['size'] != changed[k][1]['size']:
                 print(f"# size: {changed[k][0]['size']} != {changed[k][1]['size']}")
             if changed[k][0]['md5'] != changed[k][1]['md5']:
