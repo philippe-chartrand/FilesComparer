@@ -9,7 +9,7 @@ from comparelib.comparisons import minus, find_moved, intersection, modified
 from comparelib.utilities import sum_mb, choose_first, remove_trailing_slash
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk
+from gi.repository import Gtk, GLib
 
 
 class FileChooserWindow(Gtk.Window):
@@ -34,10 +34,16 @@ class FileChooserWindow(Gtk.Window):
 
         set_dest_btn = Gtk.Button(label="Choisissez le répertoire de destination")
         set_dest_btn.connect("clicked", self.on_dest_btn_clicked)
+        activity_mode_btn = Gtk.Button(label="Activity mode")
+        activity_mode_btn.connect("clicked", self.on_activity_mode_btn_clicked)
+        pulse_btn = Gtk.Button(label="Pulse")
+        pulse_btn.connect("clicked", self.on_pulse_btn_clicked)
 
         index_folders_btn = Gtk.Button(label="Indexation des répertoires")
         index_folders_btn.connect("clicked", self.on_index_folders_btn_clicked)
-
+        self.progressbar = Gtk.ProgressBar()
+        self.timeout_id = GLib.timeout_add(50, self.on_timeout, None)
+        self.activity_mode = False
         self.dir_one_path = ''
         self.dir_two_path = ''
         self.dir_one = {}
@@ -122,7 +128,8 @@ class FileChooserWindow(Gtk.Window):
         grid.attach_next_to(self.dest_stats, self.destination, Gtk.PositionType.RIGHT, 1, 1)
 
         grid.attach_next_to(index_folders_btn,set_dest_btn,Gtk.PositionType.BOTTOM, 1, 2)
-        grid.attach_next_to(cleanup_btn, index_folders_btn,Gtk.PositionType.RIGHT, 1, 2)
+        grid.attach_next_to(self.progressbar, index_folders_btn,Gtk.PositionType.RIGHT, 6, 1)
+        grid.attach_next_to(cleanup_btn, index_folders_btn,Gtk.PositionType.BOTTOM, 1, 2)
 
         grid.attach_next_to(unchanged_lbl, index_folders_btn,Gtk.PositionType.BOTTOM, 1, 2)
         grid.attach_next_to(self.unchanged_stats, unchanged_lbl,Gtk.PositionType.RIGHT, 1, 2)
@@ -151,6 +158,8 @@ class FileChooserWindow(Gtk.Window):
         grid.attach_next_to(restore_btn, update_btn,Gtk.PositionType.RIGHT, 1, 2)
         grid.attach_next_to(remove_btn, restore_btn,Gtk.PositionType.RIGHT, 1, 2)
         grid.attach_next_to(quit_btn, remove_btn, Gtk.PositionType.RIGHT, 1, 2)
+        grid.attach_next_to(activity_mode_btn,quit_btn, Gtk.PositionType.RIGHT, 1, 2)
+        grid.attach_next_to(pulse_btn,activity_mode_btn, Gtk.PositionType.RIGHT, 1, 2)
 
         self.add(grid)
 
@@ -162,6 +171,23 @@ class FileChooserWindow(Gtk.Window):
         else:
             self.confirm = True
             print("Actions are effective")
+
+    def on_activity_mode_btn_clicked(self, data):
+        if self.activity_mode:
+            self.activity_mode = False
+            self.progressbar.set_fraction(0.0)
+        else:
+            self.activity_mode = True
+
+    def on_pulse_btn_clicked(self, data):
+        self.activity_mode = True
+        self.progressbar.pulse()
+        self.activity_mode = False
+
+    def on_timeout(self, user_data):
+        if self.activity_mode:
+            self.progressbar.pulse()
+        return True
 
     def on_help_btn_clicked(self, widget):
         help_text = """
@@ -333,8 +359,10 @@ Quitter: quitter l'application.
         self.dir_one_path = self.source.get_text()
         self.dir_two_path = self.destination.get_text()
         print(f"indexing {self.source.get_text()} and {self.destination.get_text()}")
+        self.activity_mode = True
         self.index_source()
         self.index_destination()
+        self.activity_mode = False
 
     def index_source(self):
         self.dir_one_path = self.source.get_text()
@@ -344,6 +372,7 @@ Quitter: quitter l'application.
         self.dir_one = dir_one
 
     def index_destination(self):
+        self.dir_two_path = self.destination.get_text()
         dir_two = get_files(self.dir_two_path)
         print('dir_two:', len(dir_two), sum_mb(dir_two), "\n")
         self.dest_stats.set_text(f"{len(dir_two)} fichiers, {sum_mb(dir_two)}")
