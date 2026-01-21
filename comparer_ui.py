@@ -35,7 +35,7 @@ class FileChooserWindow(Gtk.Window):
         set_dest_btn = Gtk.Button(label="Choisissez le répertoire de destination")
         set_dest_btn.connect("clicked", self.on_dest_btn_clicked)
 
-        index_folders_btn = Gtk.Button(label="Indexation des répertoires\n source et destination")
+        index_folders_btn = Gtk.Button(label="Indexation des répertoires")
         index_folders_btn.connect("clicked", self.on_index_folders_btn_clicked)
 
         self.dir_one_path = ''
@@ -165,13 +165,34 @@ class FileChooserWindow(Gtk.Window):
 
     def on_help_btn_clicked(self, widget):
         help_text = """
-help: show this text
-move: move files inside destination according to changes in source
-add: copy files from source to destination when not found in destination
-update: copy files from source to destination when modified in source later than in destination
-restore: restore files from destination back to source when modified in destination later than in source
-remove: remove files from destination when not found in source
-cleanup: remove cache files for source and destination
+Comparaison des fichiers entre deux répertoires appelés source et destination. Sert à s'assurer que la synchronisation entre les deux est complète.
+
+Identifie le nombre et la masse des fichiers communs, ajoutés, déplacés, modifiés (dans la source ou dans la destination) ou absents.
+
+Mode:
+-----
+L'application peut indiquer les actions qu'elle compte entreprendre sans les effectuer (mode Simulation des actions). 
+La sortie se trouve alors sur la console sous forme de script. C'est le comportement par défaut.
+Elle peut également exécuter les actions directement. (mode effectif).
+
+Actions:
+--------
+
+Choisissez le répertoire (source/destination): Il faut d'abord indiquer quels sont ces répertoires en utilisant les deux premiers boutons ou en passant les chemins via la ligne de commande au moment de l'appel de l'application.
+
+Indexation des répertoires: Analyse des fichiers dans les répertoires (taille, md5, date). Indique le nombre et la masse de fichiers selon l'état.
+
+Supprimer les indexs: Supprimer les informations d'analyse si les répertoires source ou destination  ont changé entre temps.
+
+Déplacer: Déplace des fichiers se trouvant dans la destination pour correspondre à leur position dans la source.
+
+Ajouter: Copier depuis la source les fichiers ne se trouvant pas dans la destination.
+
+Mettre à jour: Mettre à jour depuis la source les fichiers se trouvant dans la destination.
+
+Restaurer: Récupérer vers la source des fichiers modifiés dans la destination.
+
+Enlever: supprimer de la destination des fichiers ne se trouvant plus dans ls source.
         """
 
         dialog = Gtk.MessageDialog(
@@ -237,46 +258,76 @@ cleanup: remove cache files for source and destination
             self.compare()
 
     def on_move_btn_clicked(self, widget):
-        move(self.moved, self.dir_one_path, self.dir_two_path, self.dir_two, self.confirm)
-        cleanup_empty_dirs(self.dir_two_path, self.confirm)
+        print("script will be in file move.sh")
+        original_stdout = sys.stdout
+        with open('move.sh', 'w') as f:
+            sys.stdout = f
+            move(self.moved, self.dir_one_path, self.dir_two_path, self.dir_two, self.confirm)
+            cleanup_empty_dirs(self.dir_two_path, self.confirm)
+            sys.stdout = original_stdout
+
         if self.confirm is not None:
             update_cache(self.dir_two_path, self.dir_two)
             self.index_destination()
             self.compare()
 
     def on_add_btn_clicked(self, widget):
-        add(self.added, self.dir_one_path, self.dir_two_path, self.dir_two, self.confirm)
+        print("script will be in file add.sh")
+        original_stdout = sys.stdout
+        with open('add.sh', 'w') as f:
+            sys.stdout = f
+            add(self.added, self.dir_one_path, self.dir_two_path, self.dir_two, self.confirm)
+            sys.stdout = original_stdout
+
         if self.confirm is not None:
             update_cache(self.dir_two_path, self.dir_two)
             self.index_destination()
             self.compare()
 
     def on_update_btn_clicked(self, widget):
-        update(self.changed_in_one, self.dir_two, self.confirm)
+        print("script will be in file update.sh")
+        original_stdout = sys.stdout
+        with open('update.sh', 'w') as f:
+            sys.stdout = f
+            update(self.changed_in_one, self.dir_two, self.confirm)
+            sys.stdout = original_stdout
+
         if self.confirm is not None:
             update_cache(self.dir_two_path, self.dir_two)
             self.index_destination()
             self.compare()
 
     def on_restore_btn_clicked(self, widget):
-        restore(self.changed_in_two, self.dir_one, self.confirm)
+        print("script will be in file restore.sh")
+        original_stdout = sys.stdout
+        with open('restore.sh', 'w') as f:
+            sys.stdout = f
+            restore(self.changed_in_two, self.dir_one, self.confirm)
+            sys.stdout = original_stdout
+
         if self.confirm is not None:
             update_cache(self.dir_one_path, self.dir_one)
             self.index_source()
+            self.compare()
+
+    def on_remove_btn_clicked(self, widget):
+        print("script will be in file remove.sh")
+        original_stdout = sys.stdout
+        with open('remove.sh', 'w') as f:
+            sys.stdout = f
+            remove(self.removed, self.dir_two, self.confirm)
+            cleanup_empty_dirs(self.dir_two_path, self.confirm)
+            sys.stdout = original_stdout
+
+        if self.confirm is not None:
+            update_cache(self.dir_two_path, self.dir_two)
+            self.index_destination()
             self.compare()
 
     def on_cleanup_btn_clicked(self, widget):
         remove_cache(self.dir_one_path)
         remove_cache(self.dir_two_path)
         self.cleanup_stats()
-
-    def on_remove_btn_clicked(self, widget):
-        remove(self.removed, self.dir_two, self.confirm)
-        cleanup_empty_dirs(self.dir_two_path, self.confirm)
-        if self.confirm is not None:
-            update_cache(self.dir_two_path, self.dir_two)
-            self.index_destination()
-            self.compare()
 
     def index(self):
         self.dir_one_path = self.source.get_text()
