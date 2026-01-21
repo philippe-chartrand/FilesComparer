@@ -82,7 +82,9 @@ if __name__ == '__main__':
                 update_cache(dir_two_path, dir_two)
         
         elif action == 'restore':
-            restore(changed_in_two, confirm)
+            restore(changed_in_two, dir_one, confirm)
+            if confirm is not None:
+                update_cache(dir_one_path, dir_one)
             
         elif action == 'cleanup':
             remove_cache(dir_one_path)

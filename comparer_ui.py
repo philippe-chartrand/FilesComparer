@@ -15,9 +15,9 @@ from gi.repository import Gtk
 class FileChooserWindow(Gtk.Window):
 
     def __init__(self):
-        super().__init__(title="Filesets comparer")
+        super().__init__(title="Comparaison d'ensembles de fichiers")
 
-        set_src_btn = Gtk.Button(label="Choose Source Folder")
+        set_src_btn = Gtk.Button(label="Choisissez le répertoire source")
         set_src_btn.connect("clicked", self.on_src_btn_clicked)
 
         self.source = Gtk.Entry()
@@ -32,10 +32,10 @@ class FileChooserWindow(Gtk.Window):
         self.dest_stats.set_text('')
         self.dest_stats.set_editable(False)
 
-        set_dest_btn = Gtk.Button(label="Choose Destination Folder")
+        set_dest_btn = Gtk.Button(label="Choisissez le répertoire de destination")
         set_dest_btn.connect("clicked", self.on_dest_btn_clicked)
 
-        index_folders_btn = Gtk.Button(label="Index source and\ndestination folders")
+        index_folders_btn = Gtk.Button(label="Indexation des répertoires\n source et destination")
         index_folders_btn.connect("clicked", self.on_index_folders_btn_clicked)
 
         self.dir_one_path = ''
@@ -48,48 +48,46 @@ class FileChooserWindow(Gtk.Window):
 
         self.moved = {}
 
-        self.moved = {}
-
         self.common = {}
         self.changed_in_one = {}
         self.changed_in_two = {}
         self.unchanged = {}
 
         self.confirm = None
-        simulate = Gtk.CheckButton(label="Simulation")
-        simulate.connect("toggled", self.on_simulate_button_toggled, "1")
-        simulate.set_active(True)
+        self.simulate = Gtk.CheckButton(label="Simulation des actions")
+        self.simulate.connect("toggled", self.on_simulate_button_toggled, "1")
+        self.simulate.set_active(True)
 
-        help_btn = Gtk.Button(label='help')
+        help_btn = Gtk.Button(label='Aide')
         help_btn.connect("clicked", self.on_help_btn_clicked)
 
-        move_btn = Gtk.Button(label='move')
+        move_btn = Gtk.Button(label='Déplacer')
         move_btn.connect("clicked", self.on_move_btn_clicked)
 
-        add_btn = Gtk.Button(label='add')
+        add_btn = Gtk.Button(label='Ajouter')
         add_btn.connect("clicked", self.on_add_btn_clicked)
 
-        update_btn = Gtk.Button(label='update')
+        update_btn = Gtk.Button(label='Mettre à jour')
         update_btn.connect("clicked", self.on_update_btn_clicked)
 
-        restore_btn = Gtk.Button(label='restore')
+        restore_btn = Gtk.Button(label='Restaurer')
         restore_btn.connect("clicked", self.on_restore_btn_clicked)
 
-        remove_btn = Gtk.Button(label='remove')
+        remove_btn = Gtk.Button(label='Enlever')
         remove_btn.connect("clicked", self.on_remove_btn_clicked)
 
-        cleanup_btn = Gtk.Button(label='cleanup')
+        cleanup_btn = Gtk.Button(label='Supprimer les indexs')
         cleanup_btn.connect("clicked", self.on_cleanup_btn_clicked)
 
-        quit_btn = Gtk.Button(label='Quit')
+        quit_btn = Gtk.Button(label='Quitter')
         quit_btn.connect("clicked", Gtk.main_quit)
 
-        unchanged_lbl = Gtk.Label(label="unchanged")
-        added_lbl = Gtk.Label(label="added")
-        moved_lbl = Gtk.Label(label="moved")
-        changed_in_src_lbl = Gtk.Label(label="changed in source")
-        changed_in_dest_lbl = Gtk.Label(label="changed in destination")
-        removed_lbl = Gtk.Label(label="removed")
+        unchanged_lbl = Gtk.Label(label="Sans changement")
+        added_lbl = Gtk.Label(label="Ajouté")
+        moved_lbl = Gtk.Label(label="Déplacé")
+        changed_in_src_lbl = Gtk.Label(label="Source modifiée")
+        changed_in_dest_lbl = Gtk.Label(label="Destination modifiée")
+        removed_lbl = Gtk.Label(label="Supprimé")
 
         self.unchanged_stats = Gtk.Entry()
         self.unchanged_stats.set_text('')
@@ -124,6 +122,7 @@ class FileChooserWindow(Gtk.Window):
         grid.attach_next_to(self.dest_stats, self.destination, Gtk.PositionType.RIGHT, 1, 1)
 
         grid.attach_next_to(index_folders_btn,set_dest_btn,Gtk.PositionType.BOTTOM, 1, 2)
+        grid.attach_next_to(cleanup_btn, index_folders_btn,Gtk.PositionType.RIGHT, 1, 2)
 
         grid.attach_next_to(unchanged_lbl, index_folders_btn,Gtk.PositionType.BOTTOM, 1, 2)
         grid.attach_next_to(self.unchanged_stats, unchanged_lbl,Gtk.PositionType.RIGHT, 1, 2)
@@ -143,16 +142,15 @@ class FileChooserWindow(Gtk.Window):
         grid.attach_next_to(removed_lbl, changed_in_dest_lbl,Gtk.PositionType.BOTTOM, 1, 2)
         grid.attach_next_to(self.removed_stats, removed_lbl,Gtk.PositionType.RIGHT, 1, 2)
 
-        grid.attach_next_to(simulate, removed_lbl, Gtk.PositionType.BOTTOM, 1, 2)
-        grid.attach_next_to(help_btn, simulate, Gtk.PositionType.BOTTOM, 1, 2)
+        grid.attach_next_to(self.simulate, removed_lbl, Gtk.PositionType.BOTTOM, 1, 2)
+        grid.attach_next_to(help_btn, self.simulate, Gtk.PositionType.BOTTOM, 1, 2)
 
         grid.attach_next_to(move_btn, help_btn,Gtk.PositionType.RIGHT, 1, 2)
         grid.attach_next_to(add_btn, move_btn,Gtk.PositionType.RIGHT, 1, 2)
         grid.attach_next_to(update_btn, add_btn,Gtk.PositionType.RIGHT, 1, 2)
         grid.attach_next_to(restore_btn, update_btn,Gtk.PositionType.RIGHT, 1, 2)
         grid.attach_next_to(remove_btn, restore_btn,Gtk.PositionType.RIGHT, 1, 2)
-        grid.attach_next_to(cleanup_btn, remove_btn,Gtk.PositionType.RIGHT, 1, 2)
-        grid.attach_next_to(quit_btn, cleanup_btn, Gtk.PositionType.BOTTOM, 1, 2)
+        grid.attach_next_to(quit_btn, remove_btn, Gtk.PositionType.RIGHT, 1, 2)
 
         self.add(grid)
 
@@ -193,7 +191,7 @@ cleanup: remove cache files for source and destination
 
     def on_src_btn_clicked(self, widget):
         dialog = Gtk.FileChooserDialog(
-            title="Please choose a source folder",
+            title="Choisissez un répertoire source",
             parent=self,
             action=Gtk.FileChooserAction.SELECT_FOLDER,
         )
@@ -214,7 +212,7 @@ cleanup: remove cache files for source and destination
 
     def on_dest_btn_clicked(self, widget):
         dialog = Gtk.FileChooserDialog(
-            title="Please choose a destination folder",
+            title="Choisissez un répertoire destination",
             parent=self,
             action=Gtk.FileChooserAction.SELECT_FOLDER,
         )
@@ -244,30 +242,33 @@ cleanup: remove cache files for source and destination
         if self.confirm is not None:
             update_cache(self.dir_two_path, self.dir_two)
             self.index_destination()
+            self.compare()
 
     def on_add_btn_clicked(self, widget):
         add(self.added, self.dir_one_path, self.dir_two_path, self.dir_two, self.confirm)
         if self.confirm is not None:
             update_cache(self.dir_two_path, self.dir_two)
             self.index_destination()
+            self.compare()
 
     def on_update_btn_clicked(self, widget):
         update(self.changed_in_one, self.dir_two, self.confirm)
         if self.confirm is not None:
             update_cache(self.dir_two_path, self.dir_two)
             self.index_destination()
+            self.compare()
 
     def on_restore_btn_clicked(self, widget):
-        restore(self.changed_in_two, self.confirm)
+        restore(self.changed_in_two, self.dir_one, self.confirm)
         if self.confirm is not None:
             update_cache(self.dir_one_path, self.dir_one)
             self.index_source()
+            self.compare()
 
     def on_cleanup_btn_clicked(self, widget):
         remove_cache(self.dir_one_path)
         remove_cache(self.dir_two_path)
         self.cleanup_stats()
-
 
     def on_remove_btn_clicked(self, widget):
         remove(self.removed, self.dir_two, self.confirm)
@@ -275,6 +276,7 @@ cleanup: remove cache files for source and destination
         if self.confirm is not None:
             update_cache(self.dir_two_path, self.dir_two)
             self.index_destination()
+            self.compare()
 
     def index(self):
         self.dir_one_path = self.source.get_text()
@@ -287,13 +289,13 @@ cleanup: remove cache files for source and destination
         self.dir_one_path = self.source.get_text()
         dir_one = get_files(self.dir_one_path)
         print('dir_one:', len(dir_one), sum_mb(dir_one))
-        self.source_stats.set_text(f"{len(dir_one)} {sum_mb(dir_one)}")
+        self.source_stats.set_text(f"{len(dir_one)} fichiers, {sum_mb(dir_one)}")
         self.dir_one = dir_one
 
     def index_destination(self):
         dir_two = get_files(self.dir_two_path)
         print('dir_two:', len(dir_two), sum_mb(dir_two), "\n")
-        self.dest_stats.set_text(f"{len(dir_two)} {sum_mb(dir_two)}")
+        self.dest_stats.set_text(f"{len(dir_two)} fichiers, {sum_mb(dir_two)}")
         self.dir_two = dir_two
 
     def compare(self):
@@ -306,22 +308,25 @@ cleanup: remove cache files for source and destination
         self.changed_in_one, self.changed_in_two, self.unchanged = modified(self.common)
 
         print('unchanged:', len(self.unchanged), sum_mb(choose_first(self.unchanged)))
-        self.unchanged_stats.set_text(f"{len(self.unchanged)} {sum_mb(choose_first(self.unchanged))}")
+        self.unchanged_stats.set_text(f"{len(self.unchanged)} fichiers, {sum_mb(choose_first(self.unchanged))}")
 
         print('added:', len(self.added), sum_mb(self.added))
-        self.added_stats.set_text(f"{len(self.added)} {sum_mb(self.added)}")
+        self.added_stats.set_text(f"{len(self.added)} fichiers, {sum_mb(self.added)}")
 
         print('moved:', len(self.moved), sum_mb(choose_first(self.moved)))
-        self.moved_stats.set_text(f"{len(self.moved)} {sum_mb(self.moved)}")
+        self.moved_stats.set_text(f"{len(self.moved)} fichiers, {sum_mb(self.moved)}")
 
         print('changed in source:', len(self.changed_in_one), sum_mb(choose_first(self.changed_in_one)))
-        self.changed_in_src_stats.set_text(f"{len(self.changed_in_one)} {sum_mb(choose_first(self.changed_in_one))}")
+        self.changed_in_src_stats.set_text(f"{len(self.changed_in_one)} fichiers, {sum_mb(choose_first(self.changed_in_one))}")
 
         print('changed in destination:', len(self.changed_in_two), sum_mb(choose_first(self.changed_in_two)))
-        self.changed_in_dest_stats.set_text(f"{len(self.changed_in_two)} {sum_mb(choose_first(self.changed_in_two))}")
+        self.changed_in_dest_stats.set_text(f"{len(self.changed_in_two)} fichiers, {sum_mb(choose_first(self.changed_in_two))}")
 
         print('removed:', len(self.removed), sum_mb(self.removed), "\n")
-        self.removed_stats.set_text(f"{len(self.removed)} {sum_mb(self.removed)}")
+        self.removed_stats.set_text(f"{len(self.removed)} fichiers, {sum_mb(self.removed)}")
+
+        self.on_simulate_button_toggled(self.simulate,"1")
+        self.simulate.set_active(True)
 
     def cleanup_stats(self):
         self.source_stats.set_text('')
@@ -332,6 +337,7 @@ cleanup: remove cache files for source and destination
         self.changed_in_src_stats.set_text('')
         self.changed_in_dest_stats.set_text('')
         self.removed_stats.set_text('')
+
 
 win = FileChooserWindow()
 if sys.argv[1] is not None:

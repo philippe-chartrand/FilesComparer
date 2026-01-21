@@ -85,7 +85,7 @@ def update(changed, dir_two, confirm):
             pass
 
 
-def restore(changed, confirm):
+def restore(changed, dir_one, confirm):
     for k in sorted(changed.keys()):
         try:
             source = changed[k][0]['path']
@@ -101,6 +101,8 @@ def restore(changed, confirm):
             if confirm is not None:
                 make_dest_directory("/".join(source.parts[0:-1]))
                 shutil.copyfile(destination, source)
+                dir_one[k]['mtime'] = changed[k][1]['mtime']
+                dir_one[k]['md5'] = changed[k][1]['md5']
         except:
             print("failed to restore", k.encode('utf-8', 'surrogateescape'))
             pass
