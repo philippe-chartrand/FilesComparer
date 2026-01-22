@@ -162,8 +162,15 @@ class FileChooserWindow(Gtk.Window):
             print("Actions are effective")
 
     def _calc_progressbar_ratio(self, destination_files_count, source_files_count):
-        numer = len(self.dir_one) + len(self.dir_two)
-        denom = source_files_count + destination_files_count
+        if source_files_count > 0 and destination_files_count == 0:
+            numer = len(self.dir_one)
+            denom = source_files_count
+        elif source_files_count == 0 and destination_files_count > 0:
+            numer = len(self.dir_two)
+            denom = destination_files_count
+        else:
+            numer = len(self.dir_one) + len(self.dir_two)
+            denom = source_files_count + destination_files_count
         frac = float(numer) / float(denom)
         return frac
 
@@ -171,31 +178,34 @@ class FileChooserWindow(Gtk.Window):
         source_files_count = len(self.source_files)
         destination_files_count = len(self.destination_files)
         size = self.BATCH_SIZE
-        if source_files_count > 0 and destination_files_count > 0:
+        if source_files_count > 0 or destination_files_count > 0:
 
-            before = datetime.datetime.now()
-            self.source_chunk_count, self.dir_one = self.process_chunk(size, self.source_files, self.source_chunk_count, self.dir_one, self.dir_one_path)
-            duration = datetime.datetime.now() - before
-            frac = self._calc_progressbar_ratio(destination_files_count, source_files_count)
-            self.progressbar.set_fraction(frac)
-            print(f"     source: {self.source_chunk_count*size}/{source_files_count} {duration.microseconds/1000:.0f} ms {frac:.0%}")
+            if source_files_count > 0:
+                before = datetime.datetime.now()
+                self.source_chunk_count, self.dir_one = self.process_chunk(size, self.source_files, self.source_chunk_count, self.dir_one, self.dir_one_path)
+                duration = datetime.datetime.now() - before
+                frac = self._calc_progressbar_ratio(destination_files_count, source_files_count)
+                self.progressbar.set_fraction(frac)
+                print(f"     source: {self.source_chunk_count*size}/{source_files_count} {duration.microseconds/1000:.0f} ms {frac:.0%}")
 
-            before = datetime.datetime.now()
-            self.destination_chunk_count, self.dir_two = self.process_chunk(size, self.destination_files, self.destination_chunk_count, self.dir_two, self.dir_two_path)
-            duration = datetime.datetime.now() - before
-            frac = self._calc_progressbar_ratio(destination_files_count, source_files_count)
-            print(f"destination: {self.destination_chunk_count*size}/{destination_files_count} {duration.microseconds/1000:.0f} ms {frac:.0%}\n")
+            if destination_files_count > 0:
+                before = datetime.datetime.now()
+                self.destination_chunk_count, self.dir_two = self.process_chunk(size, self.destination_files, self.destination_chunk_count, self.dir_two, self.dir_two_path)
+                duration = datetime.datetime.now() - before
+                frac = self._calc_progressbar_ratio(destination_files_count, source_files_count)
+                print(f"destination: {self.destination_chunk_count*size}/{destination_files_count} {duration.microseconds/1000:.0f} ms {frac:.0%}\n")
 
             if source_files_count == len(self.dir_one):
                 self.source_stats.set_text(f"{len(self.dir_one)} fichiers, {sum_mb(self.dir_one)}")
                 update_cache(self.dir_one_path, self.dir_one)
+                self.source_files = []
+
             if destination_files_count == len(self.dir_two):
                 self.dest_stats.set_text(f"{len(self.dir_two)} fichiers, {sum_mb(self.dir_two)}")
                 update_cache(self.dir_two_path, self.dir_two)
+                self.destination_files = []
 
             if source_files_count == len(self.dir_one) and destination_files_count == len(self.dir_two):
-                self.source_files = []
-                self.destination_files = []
                 self.compare()
         else:
             self.progressbar.set_fraction(0.0)
