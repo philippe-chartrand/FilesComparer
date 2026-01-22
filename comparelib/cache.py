@@ -71,6 +71,23 @@ def remove_cache(dir_path):
     os.unlink(cache_file_path)
 
 
+def scan_directories(dir_path):
+    dir_files = []
+    print(f"Scanning all files in {dir_path} for infos...")
+    for p in Path(dir_path).rglob("*.*"):
+        if p.is_file() and not 'listes' in p.parts:
+            dir_files.append(p)
+    return dir_files
+
+def get_files_paginated(dir_path, files_list, offset, size):
+    dir_files = {}
+
+    for i, p in enumerate(files_list[offset:offset+size]):
+        dir_files[os.fspath(p).replace(dir_path, '')] = dict(path=p, size=os.stat(p).st_size,
+                                                                 md5=md5_partial_checksum(p),
+                                                                 mtime=os.stat(p).st_mtime)
+    return dir_files
+
 def get_files(dir_path):
     cache_file_path = calc_cache_file_path(dir_path)
     dir_files = {}
