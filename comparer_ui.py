@@ -4,7 +4,8 @@ import sys
 import gi
 
 from comparelib.actions import cleanup_empty_dirs, move, remove, restore, update, add
-from comparelib.cache import get_files, update_cache, remove_cache, scan_directories, get_files_paginated
+from comparelib.cache import get_files, update_cache, remove_cache, scan_directories, \
+    can_read_from_cache, get_files_paginated
 from comparelib.comparisons import minus, find_moved, intersection, modified
 from comparelib.utilities import sum_mb, choose_first, remove_trailing_slash
 
@@ -14,7 +15,7 @@ from gi.repository import Gtk, GLib
 
 class FileChooserWindow(Gtk.Window):
     TIMEOUT = 3000
-    BATCH_SIZE = 80
+    BATCH_SIZE = 90
     def __init__(self):
         super().__init__(title="Comparaison d'ensembles de fichiers")
 
@@ -38,16 +39,11 @@ class FileChooserWindow(Gtk.Window):
         self.destination_chunk_count = 0
         set_dest_btn = Gtk.Button(label="Choisissez le répertoire de destination")
         set_dest_btn.connect("clicked", self.on_dest_btn_clicked)
-        activity_mode_btn = Gtk.Button(label="Activity mode")
-        activity_mode_btn.connect("clicked", self.on_activity_mode_btn_clicked)
-        pulse_btn = Gtk.Button(label="Pulse")
-        pulse_btn.connect("clicked", self.on_pulse_btn_clicked)
 
         index_folders_btn = Gtk.Button(label="Indexation des répertoires")
         index_folders_btn.connect("clicked", self.on_index_folders_btn_clicked)
         self.progressbar = Gtk.ProgressBar()
         self.timeout_id = GLib.timeout_add(self.TIMEOUT, self.on_timeout, None)
-        self.activity_mode = False
         self.dir_one_path = ''
         self.dir_two_path = ''
         self.dir_one = {}
@@ -68,8 +64,8 @@ class FileChooserWindow(Gtk.Window):
 
         added_lbl, changed_in_dest_lbl, changed_in_src_lbl, moved_lbl, removed_lbl, unchanged_lbl = self._fields()
 
-        self._layout(activity_mode_btn, add_btn, added_lbl, changed_in_dest_lbl, changed_in_src_lbl, cleanup_btn,
-                     help_btn, index_folders_btn, move_btn, moved_lbl, pulse_btn, quit_btn, remove_btn, removed_lbl,
+        self._layout(add_btn, added_lbl, changed_in_dest_lbl, changed_in_src_lbl, cleanup_btn,
+                     help_btn, index_folders_btn, move_btn, moved_lbl, quit_btn, remove_btn, removed_lbl,
                      restore_btn, set_dest_btn, set_src_btn, unchanged_lbl, update_btn)
 
     def _fields(self):
@@ -121,8 +117,8 @@ class FileChooserWindow(Gtk.Window):
         quit_btn.connect("clicked", Gtk.main_quit)
         return add_btn, cleanup_btn, help_btn, move_btn, quit_btn, remove_btn, restore_btn, update_btn
 
-    def _layout(self, activity_mode_btn, add_btn, added_lbl, changed_in_dest_lbl, changed_in_src_lbl, cleanup_btn,
-                help_btn, index_folders_btn, move_btn, moved_lbl, pulse_btn, quit_btn, remove_btn, removed_lbl,
+    def _layout(self, add_btn, added_lbl, changed_in_dest_lbl, changed_in_src_lbl, cleanup_btn,
+                help_btn, index_folders_btn, move_btn, moved_lbl, quit_btn, remove_btn, removed_lbl,
                 restore_btn, set_dest_btn, set_src_btn, unchanged_lbl, update_btn):
         grid = Gtk.Grid()
         grid.add(set_src_btn)
@@ -154,8 +150,6 @@ class FileChooserWindow(Gtk.Window):
         grid.attach_next_to(restore_btn, update_btn, Gtk.PositionType.RIGHT, 1, 2)
         grid.attach_next_to(remove_btn, restore_btn, Gtk.PositionType.RIGHT, 1, 2)
         grid.attach_next_to(quit_btn, remove_btn, Gtk.PositionType.RIGHT, 1, 2)
-        grid.attach_next_to(activity_mode_btn, quit_btn, Gtk.PositionType.RIGHT, 1, 2)
-        grid.attach_next_to(pulse_btn, activity_mode_btn, Gtk.PositionType.RIGHT, 1, 2)
         self.add(grid)
 
     def on_simulate_button_toggled(self, button, name):
@@ -167,17 +161,11 @@ class FileChooserWindow(Gtk.Window):
             self.confirm = True
             print("Actions are effective")
 
-    def on_activity_mode_btn_clicked(self, data):
-        if self.activity_mode:
-            self.activity_mode = False
-            self.progressbar.set_fraction(0.0)
-        else:
-            self.activity_mode = True
-
-    def on_pulse_btn_clicked(self, data):
-        self.activity_mode = True
-        self.progressbar.pulse()
-        self.activity_mode = False
+    def _calc_progressbar_ratio(self, destination_files_count, source_files_count):
+        numer = len(self.dir_one) + len(self.dir_two)
+        denom = source_files_count + destination_files_count
+        frac = float(numer) / float(denom)
+        return frac
 
     def on_timeout(self, user_data):
         source_files_count = len(self.source_files)
@@ -188,20 +176,23 @@ class FileChooserWindow(Gtk.Window):
             before = datetime.datetime.now()
             self.source_chunk_count, self.dir_one = self.process_chunk(size, self.source_files, self.source_chunk_count, self.dir_one, self.dir_one_path)
             duration = datetime.datetime.now() - before
-            frac = self.calc_progressbar_ratio(destination_files_count, source_files_count)
+            frac = self._calc_progressbar_ratio(destination_files_count, source_files_count)
             self.progressbar.set_fraction(frac)
-            print('source:', self.source_chunk_count, self.source_chunk_count*size, duration.microseconds/1000, f"{frac:.0%}")
+            print(f"     source: {self.source_chunk_count*size}/{source_files_count} {duration.microseconds/1000:.0f} ms {frac:.0%}")
 
             before = datetime.datetime.now()
             self.destination_chunk_count, self.dir_two = self.process_chunk(size, self.destination_files, self.destination_chunk_count, self.dir_two, self.dir_two_path)
             duration = datetime.datetime.now() - before
-            frac = self.calc_progressbar_ratio(destination_files_count, source_files_count)
-            print('destination:', self.destination_chunk_count, self.destination_chunk_count*size, duration.microseconds/1000,f"{frac:.0%}")
+            frac = self._calc_progressbar_ratio(destination_files_count, source_files_count)
+            print(f"destination: {self.destination_chunk_count*size}/{destination_files_count} {duration.microseconds/1000:.0f} ms {frac:.0%}\n")
 
             if source_files_count == len(self.dir_one):
                 self.source_stats.set_text(f"{len(self.dir_one)} fichiers, {sum_mb(self.dir_one)}")
+                update_cache(self.dir_one_path, self.dir_one)
             if destination_files_count == len(self.dir_two):
                 self.dest_stats.set_text(f"{len(self.dir_two)} fichiers, {sum_mb(self.dir_two)}")
+                update_cache(self.dir_two_path, self.dir_two)
+
             if source_files_count == len(self.dir_one) and destination_files_count == len(self.dir_two):
                 self.source_files = []
                 self.destination_files = []
@@ -209,21 +200,6 @@ class FileChooserWindow(Gtk.Window):
         else:
             self.progressbar.set_fraction(0.0)
         return True
-
-    def calc_progressbar_ratio(self, destination_files_count, source_files_count):
-        numer = len(self.dir_one) + len(self.dir_two)
-        denom = source_files_count + destination_files_count
-        frac = float(numer) / float(denom)
-        return frac
-
-    def process_chunk(self, size, files, chunk_count, dir, path):
-        if len(files) > 0 and chunk_count * size < len(files):
-            offset = chunk_count * size
-            chunk = get_files_paginated(path, files, offset, size)
-            dir = {**dir, **chunk}
-            chunk_count = chunk_count + 1
-            # print(path, len(dir))
-        return chunk_count, dir
 
     def on_help_btn_clicked(self, widget):
         help_text = """
@@ -389,27 +365,48 @@ Quitter: quitter l'application.
     def on_cleanup_btn_clicked(self, widget):
         remove_cache(self.dir_one_path)
         remove_cache(self.dir_two_path)
+        self.source_files=[]
+        self.destination_files=[]
         self.cleanup_stats()
 
     def index(self):
         self.dir_one_path = self.source.get_text()
         self.dir_two_path = self.destination.get_text()
-        print(f"indexing {self.source.get_text()} and {self.destination.get_text()}")
         self.index_source()
         self.index_destination()
-        self.activity_mode = True
+        if len(self.dir_one) > 0 and len(self.dir_two) > 0:
+            self.compare()
 
     def index_source(self):
         self.dir_one_path = self.source.get_text()
-        self.source_files = scan_directories(self.dir_one_path)
-        print('dir_one:', len( self.source_files))
-        self.source_stats.set_text(f"{len(self.source_files)} fichiers")
+        if can_read_from_cache(self.dir_one_path):
+            self.dir_one = get_files(self.dir_one_path)
+            print('dir_one:', len(self.dir_one))
+            self.source_stats.set_text(f"{len(self.dir_one)} fichiers, {sum_mb(self.dir_one)}")
+        else:
+            self.source_files = scan_directories(self.dir_one_path)
+            print('dir_one:', len( self.source_files))
+            self.source_stats.set_text(f"{len(self.source_files)} fichiers")
 
     def index_destination(self):
         self.dir_two_path = self.destination.get_text()
-        self.destination_files = scan_directories(self.dir_two_path)
-        print('dir_two:', len(self.destination_files), "\n")
-        self.dest_stats.set_text(f"{len(self.destination_files)} fichiers")
+        if can_read_from_cache(self.dir_two_path):
+            self.dir_two = get_files(self.dir_two_path)
+            print('dir_two:', len(self.dir_two))
+            self.dest_stats.set_text(f"{len(self.dir_two)} fichiers, {sum_mb(self.dir_two)}")
+        else:
+            self.destination_files = scan_directories(self.dir_two_path)
+            print('dir_two:', len(self.destination_files), "\n")
+            self.dest_stats.set_text(f"{len(self.destination_files)} fichiers")
+
+    def process_chunk(self, size, files, chunk_count, dir, path):
+        if len(files) > 0 and chunk_count * size < len(files):
+            offset = chunk_count * size
+            chunk = get_files_paginated(path, files, offset, size)
+            dir = {**dir, **chunk}
+            chunk_count = chunk_count + 1
+            # print(path, len(dir))
+        return chunk_count, dir
 
     def compare(self):
         self.removed = minus(self.dir_two, self.dir_one)
