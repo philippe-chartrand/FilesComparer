@@ -32,10 +32,25 @@ def calc_cache_file_path(dir_path):
     return cache_file_path
 
 
-def exit_if_cache_stale(cache_file_path):
+def check_cache_age(cache_file_path):
     ctime = datetime.datetime.fromtimestamp(os.stat(cache_file_path).st_ctime)
     now = datetime.datetime.now()
     age = now - ctime
+    return age
+
+
+def can_read_from_cache(dir_path):
+    cache_file_path = calc_cache_file_path(dir_path)
+
+    if cache_file_path.is_file():
+        age = check_cache_age(cache_file_path)
+        if age.seconds < CACHE_MAX_AGE:
+            return True
+    return False
+
+
+def exit_if_cache_stale(cache_file_path):
+    age = check_cache_age(cache_file_path)
     if age.seconds > CACHE_MAX_AGE:
         print(f"Warning: cache {cache_file_path} is {age.seconds / 60} minutes old, which is more than expected.")
         print(f"Remove or touch {cache_file_path}.")
@@ -79,9 +94,9 @@ def scan_directories(dir_path):
             dir_files.append(p)
     return dir_files
 
+
 def get_files_paginated(dir_path, files_list, offset, size):
     dir_files = {}
-
     for i, p in enumerate(files_list[offset:offset+size]):
         dir_files[os.fspath(p).replace(dir_path, '')] = dict(path=p, size=os.stat(p).st_size,
                                                                  md5=md5_partial_checksum(p),
