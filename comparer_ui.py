@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+import datetime
 import sys
 import gi
 
@@ -13,7 +13,8 @@ from gi.repository import Gtk, GLib
 
 
 class FileChooserWindow(Gtk.Window):
-
+    TIMEOUT = 3000
+    BATCH_SIZE = 80
     def __init__(self):
         super().__init__(title="Comparaison d'ensembles de fichiers")
 
@@ -45,7 +46,7 @@ class FileChooserWindow(Gtk.Window):
         index_folders_btn = Gtk.Button(label="Indexation des répertoires")
         index_folders_btn.connect("clicked", self.on_index_folders_btn_clicked)
         self.progressbar = Gtk.ProgressBar()
-        self.timeout_id = GLib.timeout_add(3000, self.on_timeout, None)
+        self.timeout_id = GLib.timeout_add(self.TIMEOUT, self.on_timeout, None)
         self.activity_mode = False
         self.dir_one_path = ''
         self.dir_two_path = ''
@@ -63,107 +64,98 @@ class FileChooserWindow(Gtk.Window):
         self.unchanged = {}
 
         self.confirm = None
-        self.simulate = Gtk.CheckButton(label="Simulation des actions")
-        self.simulate.connect("toggled", self.on_simulate_button_toggled, "1")
-        self.simulate.set_active(True)
+        add_btn, cleanup_btn, help_btn, move_btn, quit_btn, remove_btn, restore_btn, update_btn = self._buttons()
 
-        help_btn = Gtk.Button(label='Aide')
-        help_btn.connect("clicked", self.on_help_btn_clicked)
+        added_lbl, changed_in_dest_lbl, changed_in_src_lbl, moved_lbl, removed_lbl, unchanged_lbl = self._fields()
 
-        move_btn = Gtk.Button(label='Déplacer')
-        move_btn.connect("clicked", self.on_move_btn_clicked)
+        self._layout(activity_mode_btn, add_btn, added_lbl, changed_in_dest_lbl, changed_in_src_lbl, cleanup_btn,
+                     help_btn, index_folders_btn, move_btn, moved_lbl, pulse_btn, quit_btn, remove_btn, removed_lbl,
+                     restore_btn, set_dest_btn, set_src_btn, unchanged_lbl, update_btn)
 
-        add_btn = Gtk.Button(label='Ajouter')
-        add_btn.connect("clicked", self.on_add_btn_clicked)
-
-        update_btn = Gtk.Button(label='Mettre à jour')
-        update_btn.connect("clicked", self.on_update_btn_clicked)
-
-        restore_btn = Gtk.Button(label='Restaurer')
-        restore_btn.connect("clicked", self.on_restore_btn_clicked)
-
-        remove_btn = Gtk.Button(label='Enlever')
-        remove_btn.connect("clicked", self.on_remove_btn_clicked)
-
-        cleanup_btn = Gtk.Button(label='Supprimer les indexs')
-        cleanup_btn.connect("clicked", self.on_cleanup_btn_clicked)
-
-        quit_btn = Gtk.Button(label='Quitter')
-        quit_btn.connect("clicked", Gtk.main_quit)
-
+    def _fields(self):
         unchanged_lbl = Gtk.Label(label="Sans changement")
         added_lbl = Gtk.Label(label="Ajouté")
         moved_lbl = Gtk.Label(label="Déplacé")
         changed_in_src_lbl = Gtk.Label(label="Source modifiée")
         changed_in_dest_lbl = Gtk.Label(label="Destination modifiée")
         removed_lbl = Gtk.Label(label="Supprimé")
-
         self.unchanged_stats = Gtk.Entry()
         self.unchanged_stats.set_text('')
         self.unchanged_stats.set_editable(False)
-
         self.added_stats = Gtk.Entry()
         self.added_stats.set_text('')
         self.added_stats.set_editable(False)
-
         self.moved_stats = Gtk.Entry()
         self.moved_stats.set_text('')
         self.moved_stats.set_editable(False)
-
         self.changed_in_src_stats = Gtk.Entry()
         self.changed_in_src_stats.set_text('')
         self.changed_in_src_stats.set_editable(False)
-
         self.changed_in_dest_stats = Gtk.Entry()
         self.changed_in_dest_stats.set_text('')
         self.changed_in_dest_stats.set_editable(False)
-
         self.removed_stats = Gtk.Entry()
         self.removed_stats.set_text('')
         self.removed_stats.set_editable(False)
+        return added_lbl, changed_in_dest_lbl, changed_in_src_lbl, moved_lbl, removed_lbl, unchanged_lbl
 
+    def _buttons(self):
+        self.simulate = Gtk.CheckButton(label="Simulation des actions")
+        self.simulate.connect("toggled", self.on_simulate_button_toggled, "1")
+        self.simulate.set_active(True)
+        help_btn = Gtk.Button(label='Aide')
+        help_btn.connect("clicked", self.on_help_btn_clicked)
+        move_btn = Gtk.Button(label='Déplacer')
+        move_btn.connect("clicked", self.on_move_btn_clicked)
+        add_btn = Gtk.Button(label='Ajouter')
+        add_btn.connect("clicked", self.on_add_btn_clicked)
+        update_btn = Gtk.Button(label='Mettre à jour')
+        update_btn.connect("clicked", self.on_update_btn_clicked)
+        restore_btn = Gtk.Button(label='Restaurer')
+        restore_btn.connect("clicked", self.on_restore_btn_clicked)
+        remove_btn = Gtk.Button(label='Enlever')
+        remove_btn.connect("clicked", self.on_remove_btn_clicked)
+        cleanup_btn = Gtk.Button(label='Supprimer les indexs')
+        cleanup_btn.connect("clicked", self.on_cleanup_btn_clicked)
+        quit_btn = Gtk.Button(label='Quitter')
+        quit_btn.connect("clicked", Gtk.main_quit)
+        return add_btn, cleanup_btn, help_btn, move_btn, quit_btn, remove_btn, restore_btn, update_btn
+
+    def _layout(self, activity_mode_btn, add_btn, added_lbl, changed_in_dest_lbl, changed_in_src_lbl, cleanup_btn,
+                help_btn, index_folders_btn, move_btn, moved_lbl, pulse_btn, quit_btn, remove_btn, removed_lbl,
+                restore_btn, set_dest_btn, set_src_btn, unchanged_lbl, update_btn):
         grid = Gtk.Grid()
         grid.add(set_src_btn)
-        grid.attach(self.source,1, 0, 5, 1)
+        grid.attach(self.source, 1, 0, 5, 1)
         grid.attach_next_to(self.source_stats, self.source, Gtk.PositionType.RIGHT, 1, 1)
         grid.attach_next_to(set_dest_btn, set_src_btn, Gtk.PositionType.BOTTOM, 1, 2)
         grid.attach_next_to(self.destination, set_dest_btn, Gtk.PositionType.RIGHT, 5, 1)
         grid.attach_next_to(self.dest_stats, self.destination, Gtk.PositionType.RIGHT, 1, 1)
-
-        grid.attach_next_to(index_folders_btn,set_dest_btn,Gtk.PositionType.BOTTOM, 1, 2)
-        grid.attach_next_to(self.progressbar, index_folders_btn,Gtk.PositionType.RIGHT, 6, 1)
-        grid.attach_next_to(cleanup_btn, index_folders_btn,Gtk.PositionType.BOTTOM, 1, 2)
-
-        grid.attach_next_to(unchanged_lbl, cleanup_btn,Gtk.PositionType.BOTTOM, 1, 2)
-        grid.attach_next_to(self.unchanged_stats, unchanged_lbl,Gtk.PositionType.RIGHT, 1, 2)
-
+        grid.attach_next_to(index_folders_btn, set_dest_btn, Gtk.PositionType.BOTTOM, 1, 2)
+        grid.attach_next_to(self.progressbar, index_folders_btn, Gtk.PositionType.RIGHT, 6, 1)
+        grid.attach_next_to(cleanup_btn, index_folders_btn, Gtk.PositionType.BOTTOM, 1, 2)
+        grid.attach_next_to(unchanged_lbl, cleanup_btn, Gtk.PositionType.BOTTOM, 1, 2)
+        grid.attach_next_to(self.unchanged_stats, unchanged_lbl, Gtk.PositionType.RIGHT, 1, 2)
         grid.attach_next_to(added_lbl, unchanged_lbl, Gtk.PositionType.BOTTOM, 1, 2)
-        grid.attach_next_to(self.added_stats, added_lbl,Gtk.PositionType.RIGHT, 1, 2)
-
+        grid.attach_next_to(self.added_stats, added_lbl, Gtk.PositionType.RIGHT, 1, 2)
         grid.attach_next_to(moved_lbl, added_lbl, Gtk.PositionType.BOTTOM, 1, 2)
-        grid.attach_next_to(self.moved_stats, moved_lbl,Gtk.PositionType.RIGHT, 1, 2)
-
+        grid.attach_next_to(self.moved_stats, moved_lbl, Gtk.PositionType.RIGHT, 1, 2)
         grid.attach_next_to(changed_in_src_lbl, moved_lbl, Gtk.PositionType.BOTTOM, 1, 2)
-        grid.attach_next_to(self.changed_in_src_stats, changed_in_src_lbl,Gtk.PositionType.RIGHT, 1, 2)
-
+        grid.attach_next_to(self.changed_in_src_stats, changed_in_src_lbl, Gtk.PositionType.RIGHT, 1, 2)
         grid.attach_next_to(changed_in_dest_lbl, changed_in_src_lbl, Gtk.PositionType.BOTTOM, 1, 2)
-        grid.attach_next_to(self.changed_in_dest_stats, changed_in_dest_lbl,Gtk.PositionType.RIGHT, 1, 2)
-
-        grid.attach_next_to(removed_lbl, changed_in_dest_lbl,Gtk.PositionType.BOTTOM, 1, 2)
-        grid.attach_next_to(self.removed_stats, removed_lbl,Gtk.PositionType.RIGHT, 1, 2)
-
+        grid.attach_next_to(self.changed_in_dest_stats, changed_in_dest_lbl, Gtk.PositionType.RIGHT, 1, 2)
+        grid.attach_next_to(removed_lbl, changed_in_dest_lbl, Gtk.PositionType.BOTTOM, 1, 2)
+        grid.attach_next_to(self.removed_stats, removed_lbl, Gtk.PositionType.RIGHT, 1, 2)
         grid.attach_next_to(self.simulate, removed_lbl, Gtk.PositionType.BOTTOM, 1, 2)
         grid.attach_next_to(help_btn, self.simulate, Gtk.PositionType.BOTTOM, 1, 2)
-
-        grid.attach_next_to(move_btn, help_btn,Gtk.PositionType.RIGHT, 1, 2)
-        grid.attach_next_to(add_btn, move_btn,Gtk.PositionType.RIGHT, 1, 2)
-        grid.attach_next_to(update_btn, add_btn,Gtk.PositionType.RIGHT, 1, 2)
-        grid.attach_next_to(restore_btn, update_btn,Gtk.PositionType.RIGHT, 1, 2)
-        grid.attach_next_to(remove_btn, restore_btn,Gtk.PositionType.RIGHT, 1, 2)
+        grid.attach_next_to(move_btn, help_btn, Gtk.PositionType.RIGHT, 1, 2)
+        grid.attach_next_to(add_btn, move_btn, Gtk.PositionType.RIGHT, 1, 2)
+        grid.attach_next_to(update_btn, add_btn, Gtk.PositionType.RIGHT, 1, 2)
+        grid.attach_next_to(restore_btn, update_btn, Gtk.PositionType.RIGHT, 1, 2)
+        grid.attach_next_to(remove_btn, restore_btn, Gtk.PositionType.RIGHT, 1, 2)
         grid.attach_next_to(quit_btn, remove_btn, Gtk.PositionType.RIGHT, 1, 2)
-        grid.attach_next_to(activity_mode_btn,quit_btn, Gtk.PositionType.RIGHT, 1, 2)
-        grid.attach_next_to(pulse_btn,activity_mode_btn, Gtk.PositionType.RIGHT, 1, 2)
-
+        grid.attach_next_to(activity_mode_btn, quit_btn, Gtk.PositionType.RIGHT, 1, 2)
+        grid.attach_next_to(pulse_btn, activity_mode_btn, Gtk.PositionType.RIGHT, 1, 2)
         self.add(grid)
 
     def on_simulate_button_toggled(self, button, name):
@@ -188,26 +180,41 @@ class FileChooserWindow(Gtk.Window):
         self.activity_mode = False
 
     def on_timeout(self, user_data):
+        source_files_count = len(self.source_files)
+        destination_files_count = len(self.destination_files)
+        size = self.BATCH_SIZE
+        if source_files_count > 0 and destination_files_count > 0:
 
-        size = 50
-        if len(self.source_files) > 0 and len(self.destination_files) > 0:
-            numer = len(self.dir_one) + len(self.dir_two)
-            denom = len(self.source_files) + len(self.destination_files)
-            frac = float(numer) / float(denom)
-            self.progressbar.set_fraction(frac)
+            before = datetime.datetime.now()
             self.source_chunk_count, self.dir_one = self.process_chunk(size, self.source_files, self.source_chunk_count, self.dir_one, self.dir_one_path)
-            self.destination_chunk_count, self.dir_two = self.process_chunk(size, self.destination_files, self.destination_chunk_count, self.dir_two, self.dir_two_path)
+            duration = datetime.datetime.now() - before
+            frac = self.calc_progressbar_ratio(destination_files_count, source_files_count)
+            self.progressbar.set_fraction(frac)
+            print('source:', self.source_chunk_count, self.source_chunk_count*size, duration.microseconds/1000, f"{frac:.0%}")
 
-            if len(self.source_files) == len(self.dir_one):
+            before = datetime.datetime.now()
+            self.destination_chunk_count, self.dir_two = self.process_chunk(size, self.destination_files, self.destination_chunk_count, self.dir_two, self.dir_two_path)
+            duration = datetime.datetime.now() - before
+            frac = self.calc_progressbar_ratio(destination_files_count, source_files_count)
+            print('destination:', self.destination_chunk_count, self.destination_chunk_count*size, duration.microseconds/1000,f"{frac:.0%}")
+
+            if source_files_count == len(self.dir_one):
                 self.source_stats.set_text(f"{len(self.dir_one)} fichiers, {sum_mb(self.dir_one)}")
-            if len(self.destination_files) == len(self.dir_two):
+            if destination_files_count == len(self.dir_two):
                 self.dest_stats.set_text(f"{len(self.dir_two)} fichiers, {sum_mb(self.dir_two)}")
-            if len(self.source_files) == len(self.dir_one) and len(self.destination_files) == len(self.dir_two):
+            if source_files_count == len(self.dir_one) and destination_files_count == len(self.dir_two):
                 self.source_files = []
                 self.destination_files = []
                 self.compare()
-
+        else:
+            self.progressbar.set_fraction(0.0)
         return True
+
+    def calc_progressbar_ratio(self, destination_files_count, source_files_count):
+        numer = len(self.dir_one) + len(self.dir_two)
+        denom = source_files_count + destination_files_count
+        frac = float(numer) / float(denom)
+        return frac
 
     def process_chunk(self, size, files, chunk_count, dir, path):
         if len(files) > 0 and chunk_count * size < len(files):
