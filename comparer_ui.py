@@ -295,78 +295,80 @@ Quitter: quitter l'application.
             self.index()
             self.compare()
 
-    def on_move_btn_clicked(self, widget):
-        print("script will be in file move.sh")
-        original_stdout = sys.stdout
-        with open('move.sh', 'w') as f:
-            sys.stdout = f
-            move(self.moved, self.dir_one_path, self.dir_two_path, self.dir_two, self.confirm)
-            cleanup_empty_dirs(self.dir_two_path, self.confirm)
-            sys.stdout = original_stdout
+    def _chk_print_to_file(self, file_descriptor):
+        if self.confirm is None:
+            sys.stdout = file_descriptor
 
-        if self.confirm is not None:
-            update_cache(self.dir_two_path, self.dir_two)
-            self.index_destination()
-            self.compare()
-
-    def on_add_btn_clicked(self, widget):
-        print("script will be in file add.sh")
-        original_stdout = sys.stdout
-        with open('add.sh', 'w') as f:
-            sys.stdout = f
-            add(self.added, self.dir_one_path, self.dir_two_path, self.dir_two, self.confirm)
-            sys.stdout = original_stdout
-
-        if self.confirm is not None:
-            update_cache(self.dir_two_path, self.dir_two)
-            self.index_destination()
-            self.compare()
-
-    def on_update_btn_clicked(self, widget):
-        print("script will be in file update.sh")
-        original_stdout = sys.stdout
-        with open('update.sh', 'w') as f:
-            sys.stdout = f
-            update(self.changed_in_one, self.dir_two, self.confirm)
-            sys.stdout = original_stdout
-
-        if self.confirm is not None:
-            update_cache(self.dir_two_path, self.dir_two)
-            self.index_destination()
-            self.compare()
-
-    def on_restore_btn_clicked(self, widget):
-        print("script will be in file restore.sh")
-        original_stdout = sys.stdout
-        with open('restore.sh', 'w') as f:
-            sys.stdout = f
-            restore(self.changed_in_two, self.dir_one, self.confirm)
-            sys.stdout = original_stdout
-
+    def _update_first_cache_and_compare(self):
         if self.confirm is not None:
             update_cache(self.dir_one_path, self.dir_one)
             self.index_source()
             self.compare()
 
-    def on_remove_btn_clicked(self, widget):
-        print("script will be in file remove.sh")
-        original_stdout = sys.stdout
-        with open('remove.sh', 'w') as f:
-            sys.stdout = f
-            remove(self.removed, self.dir_two, self.confirm)
-            cleanup_empty_dirs(self.dir_two_path, self.confirm)
-            sys.stdout = original_stdout
-
+    def _update_second_cache_and_compare(self):
         if self.confirm is not None:
             update_cache(self.dir_two_path, self.dir_two)
             self.index_destination()
             self.compare()
+
+    def on_move_btn_clicked(self, widget):
+        print("script will be in file move.sh")
+        original_stdout = sys.stdout
+        with open('move.sh', 'w') as f:
+            self._chk_print_to_file(f)
+            move(self.moved, self.dir_one_path, self.dir_two_path, self.dir_two, self.confirm)
+            cleanup_empty_dirs(self.dir_two_path, self.confirm)
+            self._chk_print_to_file(original_stdout)
+
+        self._update_second_cache_and_compare()
+
+    def on_add_btn_clicked(self, widget):
+        print("script will be in file add.sh")
+        original_stdout = sys.stdout
+        with open('add.sh', 'w') as f:
+            add(self.added, self.dir_one_path, self.dir_two_path, self.dir_two, self.confirm)
+            self._chk_print_to_file(original_stdout)
+
+        self._update_second_cache_and_compare()
+
+    def on_update_btn_clicked(self, widget):
+        print("script will be in file update.sh")
+        original_stdout = sys.stdout
+        with open('update.sh', 'w') as f:
+            self._chk_print_to_file(f)
+            update(self.changed_in_one, self.dir_two, self.confirm)
+            self._chk_print_to_file(original_stdout)
+
+        self._update_second_cache_and_compare()
+
+    def on_restore_btn_clicked(self, widget):
+        print("script will be in file restore.sh")
+        original_stdout = sys.stdout
+        with open('restore.sh', 'w') as f:
+            self._chk_print_to_file(f)
+            restore(self.changed_in_two, self.dir_one, self.confirm)
+            self._chk_print_to_file(original_stdout)
+
+        self._update_first_cache_and_compare()
+
+    def on_remove_btn_clicked(self, widget):
+        print("script will be in file remove.sh")
+        original_stdout = sys.stdout
+        with open('remove.sh', 'w') as f:
+            self._chk_print_to_file(f)
+            remove(self.removed, self.dir_two, self.confirm)
+            cleanup_empty_dirs(self.dir_two_path, self.confirm)
+            self._chk_print_to_file(original_stdout)
+
+        self._update_second_cache_and_compare()
 
     def on_cleanup_btn_clicked(self, widget):
         remove_cache(self.dir_one_path)
         remove_cache(self.dir_two_path)
         self.source_files=[]
         self.destination_files=[]
+        self.dir_one = {}
+        self.dir_two = {}
         self.cleanup_stats()
 
     def index(self):
@@ -424,7 +426,7 @@ Quitter: quitter l'application.
         self.added_stats.set_text(f"{len(self.added)} fichiers, {sum_mb(self.added)}")
 
         print('moved:', len(self.moved), sum_mb(choose_first(self.moved)))
-        self.moved_stats.set_text(f"{len(self.moved)} fichiers, {sum_mb(self.moved)}")
+        self.moved_stats.set_text(f"{len(self.moved)} fichiers, {sum_mb(choose_first(self.moved))}")
 
         print('changed in source:', len(self.changed_in_one), sum_mb(choose_first(self.changed_in_one)))
         self.changed_in_src_stats.set_text(f"{len(self.changed_in_one)} fichiers, {sum_mb(choose_first(self.changed_in_one))}")
