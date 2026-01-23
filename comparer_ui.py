@@ -5,7 +5,7 @@ import gi
 
 from comparelib.actions import cleanup_empty_dirs, move, remove, restore, update, add
 from comparelib.cache import get_files, update_cache, remove_cache, scan_directories, \
-    can_read_from_cache, get_files_paginated
+    can_read_from_cache, get_files_paginated, read_from_cache, update_cache_and_reload
 from comparelib.comparisons import minus, find_moved, intersection, modified
 from comparelib.utilities import sum_mb, choose_first, remove_trailing_slash
 
@@ -311,66 +311,77 @@ Quitter: quitter l'application.
 
     def _update_first_cache_and_compare(self):
         if self.confirm is not None:
-            update_cache(self.dir_one_path, self.dir_one)
+            self.dir_one = update_cache_and_reload(self.dir_one_path, self.dir_one)
             self.index_source()
             self.compare()
 
     def _update_second_cache_and_compare(self):
         if self.confirm is not None:
-            update_cache(self.dir_two_path, self.dir_two)
+            self.dir_two = update_cache_and_reload(self.dir_two_path, self.dir_two)
             self.index_destination()
             self.compare()
 
-    def on_move_btn_clicked(self, widget):
-        print("script will be in file move.sh")
-        original_stdout = sys.stdout
-        with open('move.sh', 'w') as f:
-            self._chk_print_to_file(f)
-            move(self.moved, self.dir_one_path, self.dir_two_path, self.dir_two, self.confirm)
-            cleanup_empty_dirs(self.dir_two_path, self.confirm)
-            self._chk_print_to_file(original_stdout)
+    def _print_script_location(self, file):
+        if self.confirm is None:
+            print(f"script will be in file {file}")
 
-        self._update_second_cache_and_compare()
+    def on_move_btn_clicked(self, widget):
+        if len(self.moved) > 0:
+            self._print_script_location("move.sh")
+            original_stdout = sys.stdout
+            with open('move.sh', 'w') as f:
+                self._chk_print_to_file(f)
+                move(self.moved, self.dir_one_path, self.dir_two_path, self.dir_two, self.confirm)
+                cleanup_empty_dirs(self.dir_two_path, self.confirm)
+                self._chk_print_to_file(original_stdout)
+
+            self._update_second_cache_and_compare()
 
     def on_add_btn_clicked(self, widget):
-        print("script will be in file add.sh")
-        original_stdout = sys.stdout
-        with open('add.sh', 'w') as f:
-            add(self.added, self.dir_one_path, self.dir_two_path, self.dir_two, self.confirm)
-            self._chk_print_to_file(original_stdout)
+        if len(self.added) > 0:
+            self._print_script_location("add.sh")
+            original_stdout = sys.stdout
+            with open('add.sh', 'w') as f:
+                self._chk_print_to_file(f)
+                add(self.added, self.dir_one_path, self.dir_two_path, self.dir_two, self.confirm)
+                self._chk_print_to_file(original_stdout)
+                self._chk_print_to_file(original_stdout)
 
-        self._update_second_cache_and_compare()
+            self._update_second_cache_and_compare()
 
     def on_update_btn_clicked(self, widget):
-        print("script will be in file update.sh")
-        original_stdout = sys.stdout
-        with open('update.sh', 'w') as f:
-            self._chk_print_to_file(f)
-            update(self.changed_in_one, self.dir_two, self.confirm)
-            self._chk_print_to_file(original_stdout)
+        if len(self.changed_in_one) > 0:
+            self._print_script_location("update.sh")
+            original_stdout = sys.stdout
+            with open('update.sh', 'w') as f:
+                self._chk_print_to_file(f)
+                update(self.changed_in_one, self.dir_two, self.confirm)
+                self._chk_print_to_file(original_stdout)
 
-        self._update_second_cache_and_compare()
+            self._update_second_cache_and_compare()
 
     def on_restore_btn_clicked(self, widget):
-        print("script will be in file restore.sh")
-        original_stdout = sys.stdout
-        with open('restore.sh', 'w') as f:
-            self._chk_print_to_file(f)
-            restore(self.changed_in_two, self.dir_one, self.confirm)
-            self._chk_print_to_file(original_stdout)
+        if len(self.changed_in_two) > 0:
+            self._print_script_location("restore.sh")
+            original_stdout = sys.stdout
+            with open('restore.sh', 'w') as f:
+                self._chk_print_to_file(f)
+                restore(self.changed_in_two, self.dir_one, self.confirm)
+                self._chk_print_to_file(original_stdout)
 
-        self._update_first_cache_and_compare()
+            self._update_first_cache_and_compare()
 
     def on_remove_btn_clicked(self, widget):
-        print("script will be in file remove.sh")
-        original_stdout = sys.stdout
-        with open('remove.sh', 'w') as f:
-            self._chk_print_to_file(f)
-            remove(self.removed, self.dir_two, self.confirm)
-            cleanup_empty_dirs(self.dir_two_path, self.confirm)
-            self._chk_print_to_file(original_stdout)
+        if len(self.removed) > 0:
+            self._print_script_location("remove.sh")
+            original_stdout = sys.stdout
+            with open('remove.sh', 'w') as f:
+                self._chk_print_to_file(f)
+                remove(self.removed, self.dir_two, self.confirm)
+                cleanup_empty_dirs(self.dir_two_path, self.confirm)
+                self._chk_print_to_file(original_stdout)
 
-        self._update_second_cache_and_compare()
+            self._update_second_cache_and_compare()
 
     def on_cleanup_btn_clicked(self, widget):
         remove_cache(self.dir_one_path)
@@ -459,6 +470,16 @@ Quitter: quitter l'application.
         self.changed_in_src_stats.set_text('')
         self.changed_in_dest_stats.set_text('')
         self.removed_stats.set_text('')
+
+    def _cleanup_comparisons(self):
+        self.removed = {}
+        self.added = {}
+        self.moved = {}
+        self.common = {}
+        self.changed_in_one = {}
+        self.changed_in_two = {}
+        self.unchanged = {}
+
 
 
 win = FileChooserWindow()

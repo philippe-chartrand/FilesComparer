@@ -79,6 +79,10 @@ def save_to_cache(dir_path, cache_file_path, dir_files):
 def update_cache(dir_path, dir_data):
     save_to_cache(dir_path, calc_cache_file_path(dir_path), dir_data)
 
+def update_cache_and_reload(dir_path, dir_data):
+    cache_file_path = calc_cache_file_path(dir_path)
+    save_to_cache(dir_path, cache_file_path, dir_data)
+    read_from_cache(dir_path, cache_file_path)
 
 def remove_cache(dir_path):
     cache_file_path = calc_cache_file_path(dir_path)
