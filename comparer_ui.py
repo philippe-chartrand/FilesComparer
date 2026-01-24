@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import datetime
+import os
 import sys
 import gi
 
@@ -491,10 +492,21 @@ Quitter: quitter l'application.
 
 
 win = FileChooserWindow()
+
+
+def cleanup_and_make_path_absolute(field, path):
+    if path.startswith('./'):
+        path=path[2:]
+    if not path.startswith('/'):
+        cwd = os.getcwd()
+        path = f"{cwd}/{path}"
+    cleaned = remove_trailing_slash(path)
+    field.set_text(cleaned)
+
 if len(sys.argv) > 1 and sys.argv[1] is not None:
-    win.source.set_text(remove_trailing_slash(sys.argv[1]))
+    cleanup_and_make_path_absolute(win.source,sys.argv[1])
 if len(sys.argv) > 2 and sys.argv[2] is not None:
-    win.destination.set_text(remove_trailing_slash(sys.argv[2]))
+    cleanup_and_make_path_absolute(win.destination, sys.argv[2])
 win.connect("destroy", Gtk.main_quit)
 win.show_all()
 Gtk.main()
