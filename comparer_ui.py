@@ -111,11 +111,11 @@ class FileChooserWindow(Gtk.Window):
         restore_btn.connect("clicked", self.on_restore_btn_clicked)
         remove_btn = Gtk.Button(label='Enlever')
         remove_btn.connect("clicked", self.on_remove_btn_clicked)
-        cleanup_btn = Gtk.Button(label='Supprimer les indexs')
-        cleanup_btn.connect("clicked", self.on_cleanup_btn_clicked)
+        cleanup_indices_btn = Gtk.Button(label='Supprimer les indexs')
+        cleanup_indices_btn.connect("clicked", self.on_cleanup_indices_btn_clicked)
         quit_btn = Gtk.Button(label='Quitter')
         quit_btn.connect("clicked", Gtk.main_quit)
-        return add_btn, cleanup_btn, help_btn, move_btn, quit_btn, remove_btn, restore_btn, update_btn
+        return add_btn, cleanup_indices_btn, help_btn, move_btn, quit_btn, remove_btn, restore_btn, update_btn
 
     def _layout(self, add_btn, added_lbl, changed_in_dest_lbl, changed_in_src_lbl, cleanup_btn,
                 help_btn, index_folders_btn, move_btn, moved_lbl, quit_btn, remove_btn, removed_lbl,
@@ -186,24 +186,26 @@ class FileChooserWindow(Gtk.Window):
                 duration = datetime.datetime.now() - before
                 frac = self._calc_progressbar_ratio(destination_files_count, source_files_count)
                 self.progressbar.set_fraction(frac)
-                print(f"     source: {self.source_chunk_count*size}/{source_files_count} {duration.microseconds/1000:.0f} ms {frac:.0%}")
+                print(f"     source: {len(self.dir_one)}/{source_files_count} {duration.microseconds/1000:.0f} ms {frac:.0%}")
 
             if destination_files_count > 0:
                 before = datetime.datetime.now()
                 self.destination_chunk_count, self.dir_two = self.process_chunk(size, self.destination_files, self.destination_chunk_count, self.dir_two, self.dir_two_path)
                 duration = datetime.datetime.now() - before
                 frac = self._calc_progressbar_ratio(destination_files_count, source_files_count)
-                print(f"destination: {self.destination_chunk_count*size}/{destination_files_count} {duration.microseconds/1000:.0f} ms {frac:.0%}\n")
+                print(f"destination: {len(self.dir_two)}/{destination_files_count} {duration.microseconds/1000:.0f} ms {frac:.0%}\n")
 
             if source_files_count == len(self.dir_one):
                 self.source_stats.set_text(f"{len(self.dir_one)} fichiers, {sum_mb(self.dir_one)}")
                 update_cache(self.dir_one_path, self.dir_one)
                 self.source_files = []
+                self.source_chunk_count = 0
 
             if destination_files_count == len(self.dir_two):
                 self.dest_stats.set_text(f"{len(self.dir_two)} fichiers, {sum_mb(self.dir_two)}")
                 update_cache(self.dir_two_path, self.dir_two)
                 self.destination_files = []
+                self.destination_chunk_count = 0
 
             if source_files_count == len(self.dir_one) and destination_files_count == len(self.dir_two):
                 self.compare()
@@ -383,7 +385,7 @@ Quitter: quitter l'application.
 
             self._update_second_cache_and_compare()
 
-    def on_cleanup_btn_clicked(self, widget):
+    def on_cleanup_indices_btn_clicked(self, widget):
         remove_cache(self.dir_one_path)
         remove_cache(self.dir_two_path)
         self.source_files=[]
@@ -409,7 +411,7 @@ Quitter: quitter l'application.
         else:
             self.source_files = scan_directories(self.dir_one_path)
             print('dir_one:', len( self.source_files))
-            self.source_stats.set_text(f"{len(self.source_files)} fichiers")
+            #self.source_stats.set_text(f"{len(self.source_files)} fichiers")
 
     def index_destination(self):
         self.dir_two_path = self.destination.get_text()
@@ -420,15 +422,21 @@ Quitter: quitter l'application.
         else:
             self.destination_files = scan_directories(self.dir_two_path)
             print('dir_two:', len(self.destination_files), "\n")
-            self.dest_stats.set_text(f"{len(self.destination_files)} fichiers")
+            #self.dest_stats.set_text(f"{len(self.destination_files)} fichiers")
 
     def process_chunk(self, size, files, chunk_count, dir, path):
-        if len(files) > 0 and chunk_count * size < len(files):
+        if len(files) > 0:
             offset = chunk_count * size
+            if len(files) < size:
+                    size = len(files)
+
             chunk = get_files_paginated(path, files, offset, size)
             dir = {**dir, **chunk}
-            chunk_count = chunk_count + 1
+
+            if len(files) > len(dir):
+                chunk_count = chunk_count + 1
             # print(path, len(dir))
+
         return chunk_count, dir
 
     def compare(self):
