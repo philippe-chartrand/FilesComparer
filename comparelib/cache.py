@@ -1,5 +1,6 @@
 import datetime
 import hashlib
+import subprocess
 from json import JSONDecoder, JSONEncoder, dump, load
 from pathlib import Path
 import os
@@ -56,6 +57,14 @@ def exit_if_cache_stale(cache_file_path):
         print(f"Remove or touch {cache_file_path}.")
         sys.exit()
 
+def exit_if_files_have_been_updated(dir_path, cache_file_path):
+    find = subprocess.run(["find", dir_path, "-type","f","-newer",str(cache_file_path) ], capture_output=True, text=True)
+    nb_found_files = len(find.stdout.split("\n")) - 1
+    if nb_found_files > 0:
+        print(f"Warning: {nb_found_files} files in {dir_path} have changed after cache was created.")
+        print(find.stdout)
+        print(f"If you are sure you want to ignore the changes, remove or touch cache {cache_file_path}")
+        sys.exit()
 
 def read_from_cache(dir_path, cache_file_path):
     dir_files = {}
@@ -112,7 +121,8 @@ def get_files(dir_path):
     dir_files = {}
     feedback_every = 100
     if cache_file_path.is_file():
-        exit_if_cache_stale(cache_file_path);
+        exit_if_cache_stale(cache_file_path)
+        exit_if_files_have_been_updated(dir_path, cache_file_path)
         dir_files = read_from_cache(dir_path, cache_file_path)
     else:
         print(f"Scanning all files in {dir_path} for infos...")
