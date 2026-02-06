@@ -6,9 +6,9 @@ import gi
 
 from comparelib.actions import cleanup_empty_dirs, move, remove, restore, update, add
 from comparelib.cache import get_files, update_cache, remove_cache, scan_directories, \
-    can_read_from_cache, get_files_paginated, read_from_cache, update_cache_and_reload
+    can_read_from_cache, get_files_paginated, update_cache_and_reload
 from comparelib.comparisons import minus, find_moved, intersection, modified
-from comparelib.utilities import sum_mb, choose_first, remove_trailing_slash
+from comparelib.utilities import sum_mb, choose_first, remove_trailing_slash, make_path_absolute
 
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GLib
@@ -495,11 +495,7 @@ win = FileChooserWindow()
 
 
 def cleanup_and_make_path_absolute(field, path):
-    if path.startswith('./'):
-        path=path[2:]
-    if not path.startswith('/'):
-        cwd = os.getcwd()
-        path = f"{cwd}/{path}"
+    path = make_path_absolute(path)
     cleaned = remove_trailing_slash(path)
     field.set_text(cleaned)
 

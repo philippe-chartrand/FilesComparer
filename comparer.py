@@ -3,7 +3,7 @@ import sys
 
 
 from comparelib.cache import get_files, update_cache, remove_cache
-from comparelib.utilities import choose_first, remove_trailing_slash, sum_mb
+from comparelib.utilities import choose_first, remove_trailing_slash, sum_mb, make_path_absolute
 from comparelib.comparisons import find_moved, intersection, minus, modified
 from comparelib.actions import add, cleanup_empty_dirs, move, update, remove, restore
 
@@ -31,8 +31,8 @@ if __name__ == '__main__':
         print(help_text);
         sys.exit(1)
         
-    dir_one_path = remove_trailing_slash(sys.argv[1])
-    dir_two_path = remove_trailing_slash(sys.argv[2])
+    dir_one_path = remove_trailing_slash(make_path_absolute(sys.argv[1]))
+    dir_two_path = remove_trailing_slash(make_path_absolute(sys.argv[2]))
     action = sys.argv[3] if len(sys.argv)> 3 else None
     confirm = sys.argv[4] if len(sys.argv)> 4 else None   
             

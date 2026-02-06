@@ -15,6 +15,13 @@ def sum_mb(data):
 def remove_trailing_slash(str):
     return str[0:-1] if str.endswith('/') else str
 
+def make_path_absolute(path):
+    if path.startswith('./'):
+        path = path[2:]
+    if not path.startswith('/'):
+        cwd = os.getcwd()
+        path = f"{cwd}/{path}"
+    return path
 
 def remove_prefix(str, substring):
     parts = []
