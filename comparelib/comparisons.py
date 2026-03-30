@@ -44,15 +44,18 @@ def find_moved(removed, added):
     for common_md5 in common_checksums:
         new_file_paths = added_checksums[common_md5]
         for new_file_path in new_file_paths:
-            for previous_file_path in removed_checksums[common_md5]:
+            previous_file_paths = removed_checksums[common_md5]
+            for previous_file_path in previous_file_paths:
                 if basename(new_file_path) == basename(previous_file_path):
                     src = removed.get(previous_file_path)
                     if src is None:
-                        print("find_moved: No such file in removed files: ", previous_file_path)
+                        if  len(new_file_paths) == 1 and len(previous_file_paths) == 1:
+                             print("find_moved: No such file in removed files: ", previous_file_path)
                         continue
                     dst = added.get(new_file_path)
                     if dst is None:
-                        print("find_moved: No such file in added files: ", new_file_path)
+                        if len(new_file_paths) == 1 and len(previous_file_paths) == 1:
+                            print("find_moved: No such file in added files: ", new_file_path)
                         continue
                     moved[previous_file_path] = (src, dst)
                     del removed[previous_file_path]
