@@ -94,10 +94,14 @@ def update_cache_and_reload(dir_path, dir_data):
     read_from_cache(dir_path, cache_file_path)
 
 def remove_cache(dir_path):
+    if dir_path == '':
+        return
     cache_file_path = calc_cache_file_path(dir_path)
     print(f"Removing cache infos {cache_file_path} for {dir_path}")
-    os.unlink(cache_file_path)
-
+    if os.path.isfile(cache_file_path):
+        os.unlink(cache_file_path)
+    else:
+        print(f"Cache file {cache_file_path} does not exist !")
 
 def scan_directories(dir_path):
     dir_files = []

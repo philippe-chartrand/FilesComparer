@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 import datetime
-import os
 import sys
 import gi
-from Xlib.Xcursorfont import spider
 
 from comparelib.actions import cleanup_empty_dirs, move, remove, restore, update, add, add_one, update_one, restore_one, \
     move_one, update_dir_two, remove_one
@@ -488,8 +486,10 @@ Quitter: quitter l'application.
                 self.pending_action = 'REMOVE'
 
     def on_cleanup_indices_btn_clicked(self, widget):
-        remove_cache(self.dir_one_path)
-        remove_cache(self.dir_two_path)
+        source_cache = self.dir_one_path if self.dir_one_path else self.source.get_text()
+        remove_cache(source_cache)
+        destination_cache = self.dir_two_path if self.dir_two_path else self.destination.get_text()
+        remove_cache(destination_cache)
         self.source_files=[]
         self.destination_files=[]
         self.dir_one = {}
