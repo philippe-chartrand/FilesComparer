@@ -21,15 +21,19 @@ def cleanup_empty_dirs(path, execute_now):
 
 
 def move(moved, dir_one_path, dir_two_path, dir_two, execute_now):
+    actions = []
     for k in sorted(moved.keys()):
         try:
             d1, d2, dest_dir, new_path, old_path = move_prepare_one(dir_one_path, dir_two_path, k, moved)
             if execute_now:
-                move_one(d2, dest_dir, dir_one_path, dir_two, k, new_path, old_path)
+                move_one(dest_dir, new_path, old_path)
+                update_dir_two(d2, dir_one_path, dir_two, k, new_path)
+            else:
+                actions.append((d2, dest_dir, dir_one_path, dir_two, k, new_path, old_path))
         except:
             print("Failed to move", d1.__str__().encode('utf-8', 'surrogateescape'))
             pass
-
+    return actions
 
 def move_prepare_one(dir_one_path, dir_two_path, k, moved):
     d1 = moved[k][0]
@@ -45,9 +49,11 @@ def move_prepare_one(dir_one_path, dir_two_path, k, moved):
     return d1, d2, dest_dir, new_path, old_path
 
 
-def move_one(d2, dest_dir, dir_one_path, dir_two, k, new_path, old_path):
+def move_one(dest_dir, new_path, old_path):
     make_dest_directory(dest_dir)
     shutil.move(old_path, new_path)
+
+def update_dir_two(d2, dir_one_path, dir_two, k, new_path):
     new_key = "/" + remove_prefix(d2['path'], dir_one_path)
     dir_two[new_key] = dir_two[k].copy()
     dir_two[new_key]['path'] = Path(new_path)
@@ -55,16 +61,18 @@ def move_one(d2, dest_dir, dir_one_path, dir_two, k, new_path, old_path):
 
 
 def add(to_add, dir_one_path, dir_two_path, dir_two, execute_now):
+    actions = []
     for k in sorted(to_add):
         try:
             dest_dir, d = add_prepare_one(dir_one_path, dir_two_path, k, to_add)
             if execute_now:
                 add_one(d, dest_dir, dir_two, k)
-
+            else:
+                actions.append((d, dest_dir, dir_two, k))
         except:
             print("failed to copy", k.encode('utf-8', 'surrogateescape'))
             pass
-
+    return actions
 
 def add_one(d, dest_dir, dir_two, k):
     make_dest_directory(dest_dir)
@@ -91,15 +99,18 @@ def compare_mtimes(mtime1, mtime2):
 
 
 def update(changed, dir_two, execute_now):
+    actions = []
     for k in sorted(changed.keys()):
         try:
             source, destination = update_prepare_one(changed, k)
             if execute_now:
                 update_one(changed, destination, dir_two, k, source)
+            else:
+                actions.append((changed, destination, dir_two, k, source))
         except:
             print("failed to update", k.encode('utf-8', 'surrogateescape'))
             pass
-
+    return actions
 
 def update_one(changed, destination, dir_two, k, source):
     make_dest_directory("/".join(destination.parts[0:-1]))
@@ -124,14 +135,17 @@ def update_prepare_one(changed, k):
 
 
 def restore(changed, dir_one, execute_now):
+    actions = []
     for k in sorted(changed.keys()):
         try:
             source, destination = restore_prepare_one(changed, k)
             if execute_now:
                 restore_one(changed, destination, dir_one, k, source)
+            else:
+                actions.append((changed, destination, dir_one, k, source))
         except:
             print("failed to restore", k.encode('utf-8', 'surrogateescape'))
-            pass
+    return actions
 
 
 def restore_one(changed, destination, dir_one, k, source):
@@ -157,15 +171,19 @@ def restore_prepare_one(changed, k):
 
 
 def remove(deleted, dir_two, execute_now):
+    actions = []
     for k in sorted(deleted.keys()):
         d=deleted[k]
         try:
             remove_prepare_one(d)
             if execute_now:
                 remove_one(d, dir_two, k)
+            else:
+                actions.append((d, dir_two, k))
         except:
             print("Failed to unlink",d['path'].encode('utf-8', 'surrogateescape'))
             pass
+    return actions
 
 
 def remove_one(d, dir_two, k):

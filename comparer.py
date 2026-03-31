@@ -28,13 +28,13 @@ cleanup: remove cache files for source and destination
 if __name__ == '__main__':
     print(sys.argv[0], ": Valid actions: ", valid_actions,"\n")
     if len(sys.argv) == 1 or sys.argv[1] == 'help':
-        print(help_text);
+        print(help_text)
         sys.exit(1)
         
     dir_one_path = remove_trailing_slash(make_path_absolute(sys.argv[1]))
     dir_two_path = remove_trailing_slash(make_path_absolute(sys.argv[2]))
     action = sys.argv[3] if len(sys.argv)> 3 else None
-    confirm = sys.argv[4] if len(sys.argv)> 4 else None   
+    confirm = True if len(sys.argv)> 4 else None
             
     dir_one = get_files(dir_one_path)
     print('dir_one:', len(dir_one), sum_mb(dir_one))
@@ -68,29 +68,29 @@ if __name__ == '__main__':
         elif action == 'remove':
             remove(removed, dir_two, confirm)
             cleanup_empty_dirs(dir_two_path, confirm)
-            if confirm is not None:
+            if confirm:
                 update_cache(dir_two_path, dir_two)
         
         elif action == 'add':
             add(added, dir_one_path, dir_two_path, dir_two, confirm)
-            if confirm is not None:
+            if confirm:
                 update_cache(dir_two_path, dir_two)
         
         elif action == 'update':
             update(changed_in_one, dir_two, confirm)
-            if confirm is not None:
+            if confirm:
                 update_cache(dir_two_path, dir_two)
         
         elif action == 'restore':
             restore(changed_in_two, dir_one, confirm)
-            if confirm is not None:
+            if confirm:
                 update_cache(dir_one_path, dir_one)
             
         elif action == 'cleanup':
             remove_cache(dir_one_path)
             remove_cache(dir_two_path)
             
-        if confirm is not None:
+        if confirm:
             if action == 'restore':
                 remove_cache(dir_one_path)
             else:

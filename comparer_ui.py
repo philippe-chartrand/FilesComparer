@@ -3,8 +3,10 @@ import datetime
 import os
 import sys
 import gi
+from Xlib.Xcursorfont import spider
 
-from comparelib.actions import cleanup_empty_dirs, move, remove, restore, update, add
+from comparelib.actions import cleanup_empty_dirs, move, remove, restore, update, add, add_one, update_one, restore_one, \
+    move_one, update_dir_two, remove_one
 from comparelib.cache import get_files, update_cache, remove_cache, scan_directories, \
     can_read_from_cache, get_files_paginated, update_cache_and_reload
 from comparelib.comparisons import minus, find_moved, intersection, modified
@@ -22,6 +24,8 @@ class FileChooserWindow(Gtk.Window):
 
         set_src_btn = Gtk.Button(label="Choisissez le répertoire source")
         set_src_btn.connect("clicked", self.on_src_btn_clicked)
+
+        self.spinner = Gtk.Spinner()
 
         self.source = Gtk.Entry()
         self.source.set_text('')
@@ -60,7 +64,13 @@ class FileChooserWindow(Gtk.Window):
         self.changed_in_two = {}
         self.unchanged = {}
 
-        self.confirm = None
+        self.add_actions = []
+        self.update_actions = []
+        self.restore_actions = []
+        self.move_actions = []
+        self.remove_actions = []
+        self.pending_action = ''
+
         add_btn, cleanup_btn, help_btn, move_btn, quit_btn, remove_btn, restore_btn, update_btn = self._buttons()
 
         added_lbl, changed_in_dest_lbl, changed_in_src_lbl, moved_lbl, removed_lbl, unchanged_lbl = self._fields()
@@ -97,9 +107,9 @@ class FileChooserWindow(Gtk.Window):
         return added_lbl, changed_in_dest_lbl, changed_in_src_lbl, moved_lbl, removed_lbl, unchanged_lbl
 
     def _buttons(self):
-        self.simulate = Gtk.CheckButton(label="Simulation des actions")
-        self.simulate.connect("toggled", self.on_simulate_button_toggled, "1")
-        self.simulate.set_active(True)
+        self.simulate_checkbox = Gtk.CheckButton(label="Simulation des actions")
+        self.simulate_checkbox.connect("toggled", self.on_simulate_button_toggled, "1")
+        self.simulate_checkbox.set_active(True)
         help_btn = Gtk.Button(label='Aide')
         help_btn.connect("clicked", self.on_help_btn_clicked)
         move_btn = Gtk.Button(label='Déplacer')
@@ -131,7 +141,8 @@ class FileChooserWindow(Gtk.Window):
         grid.attach_next_to(index_folders_btn, set_dest_btn, Gtk.PositionType.BOTTOM, 1, 2)
         grid.attach_next_to(self.progressbar, index_folders_btn, Gtk.PositionType.RIGHT, 6, 1)
         grid.attach_next_to(cleanup_btn, index_folders_btn, Gtk.PositionType.BOTTOM, 1, 2)
-        grid.attach_next_to(unchanged_lbl, cleanup_btn, Gtk.PositionType.BOTTOM, 1, 2)
+        grid.attach_next_to(self.spinner, cleanup_btn, Gtk.PositionType.RIGHT, 1, 1)
+        grid.attach_next_to(unchanged_lbl, self.spinner, Gtk.PositionType.BOTTOM, 1, 2)
         grid.attach_next_to(self.unchanged_stats, unchanged_lbl, Gtk.PositionType.RIGHT, 1, 2)
         grid.attach_next_to(added_lbl, unchanged_lbl, Gtk.PositionType.BOTTOM, 1, 2)
         grid.attach_next_to(self.added_stats, added_lbl, Gtk.PositionType.RIGHT, 1, 2)
@@ -143,8 +154,8 @@ class FileChooserWindow(Gtk.Window):
         grid.attach_next_to(self.changed_in_dest_stats, changed_in_dest_lbl, Gtk.PositionType.RIGHT, 1, 2)
         grid.attach_next_to(removed_lbl, changed_in_dest_lbl, Gtk.PositionType.BOTTOM, 1, 2)
         grid.attach_next_to(self.removed_stats, removed_lbl, Gtk.PositionType.RIGHT, 1, 2)
-        grid.attach_next_to(self.simulate, removed_lbl, Gtk.PositionType.BOTTOM, 1, 2)
-        grid.attach_next_to(help_btn, self.simulate, Gtk.PositionType.BOTTOM, 1, 2)
+        grid.attach_next_to(self.simulate_checkbox, removed_lbl, Gtk.PositionType.BOTTOM, 1, 2)
+        grid.attach_next_to(help_btn, self.simulate_checkbox, Gtk.PositionType.BOTTOM, 1, 2)
         grid.attach_next_to(move_btn, help_btn, Gtk.PositionType.RIGHT, 1, 2)
         grid.attach_next_to(add_btn, move_btn, Gtk.PositionType.RIGHT, 1, 2)
         grid.attach_next_to(update_btn, add_btn, Gtk.PositionType.RIGHT, 1, 2)
@@ -155,11 +166,8 @@ class FileChooserWindow(Gtk.Window):
 
     def on_simulate_button_toggled(self, button, name):
         if button.get_active():
-            self.confirm = None
             print("Actions are simulated")
-
         else:
-            self.confirm = True
             print("Actions are effective")
 
     def _calc_progressbar_ratio(self, destination_files_count, source_files_count):
@@ -175,41 +183,122 @@ class FileChooserWindow(Gtk.Window):
         frac = float(numer) / float(denom)
         return frac
 
-    def on_timeout(self, user_data):
+    def batch_index(self):
         source_files_count = len(self.source_files)
         destination_files_count = len(self.destination_files)
         size = self.BATCH_SIZE
-        if source_files_count > 0 or destination_files_count > 0:
+        if source_files_count > 0:
+            before = datetime.datetime.now()
+            self.source_chunk_count, self.dir_one = self.process_chunk(size, self.source_files, self.source_chunk_count,
+                                                                       self.dir_one, self.dir_one_path)
+            duration = datetime.datetime.now() - before
+            frac = self._calc_progressbar_ratio(destination_files_count, source_files_count)
+            self.progressbar.set_fraction(frac)
+            print(
+                f"     source: {len(self.dir_one)}/{source_files_count} {duration.microseconds / 1000:.0f} ms {frac:.0%}")
+        if destination_files_count > 0:
+            before = datetime.datetime.now()
+            self.destination_chunk_count, self.dir_two = self.process_chunk(size, self.destination_files,
+                                                                            self.destination_chunk_count, self.dir_two,
+                                                                            self.dir_two_path)
+            duration = datetime.datetime.now() - before
+            frac = self._calc_progressbar_ratio(destination_files_count, source_files_count)
+            print(
+                f"destination: {len(self.dir_two)}/{destination_files_count} {duration.microseconds / 1000:.0f} ms {frac:.0%}\n")
+        if source_files_count == len(self.dir_one):
+            self.source_stats.set_text(f"{len(self.dir_one)} fichiers, {sum_mb(self.dir_one)}")
+            update_cache(self.dir_one_path, self.dir_one)
+            self.source_files = []
+            self.source_chunk_count = 0
+        if destination_files_count == len(self.dir_two):
+            self.dest_stats.set_text(f"{len(self.dir_two)} fichiers, {sum_mb(self.dir_two)}")
+            update_cache(self.dir_two_path, self.dir_two)
+            self.destination_files = []
+            self.destination_chunk_count = 0
+        if source_files_count == len(self.dir_one) and destination_files_count == len(self.dir_two):
+            self.compare()
+            self.on_simulate_button_toggled(self.simulate_checkbox, "1")
+            self.simulate_checkbox.set_active(True)
 
-            if source_files_count > 0:
-                before = datetime.datetime.now()
-                self.source_chunk_count, self.dir_one = self.process_chunk(size, self.source_files, self.source_chunk_count, self.dir_one, self.dir_one_path)
-                duration = datetime.datetime.now() - before
-                frac = self._calc_progressbar_ratio(destination_files_count, source_files_count)
-                self.progressbar.set_fraction(frac)
-                print(f"     source: {len(self.dir_one)}/{source_files_count} {duration.microseconds/1000:.0f} ms {frac:.0%}")
+    def batch_add(self):
+        if self.simulate_checkbox.get_active():
+            return
+        if len(self.add_actions) > 0:
+            self.progressbar.set_fraction(1.0/ float(len(self.add_actions)))
+            d, dest_dir, dir_two, k = self.add_actions.pop()
+            add_one(d, dest_dir, dir_two, k)
+        else:
+            self._update_second_cache_and_compare()
+            self.pending_action = ''
 
-            if destination_files_count > 0:
-                before = datetime.datetime.now()
-                self.destination_chunk_count, self.dir_two = self.process_chunk(size, self.destination_files, self.destination_chunk_count, self.dir_two, self.dir_two_path)
-                duration = datetime.datetime.now() - before
-                frac = self._calc_progressbar_ratio(destination_files_count, source_files_count)
-                print(f"destination: {len(self.dir_two)}/{destination_files_count} {duration.microseconds/1000:.0f} ms {frac:.0%}\n")
+    def batch_update(self):
+        if self.simulate_checkbox.get_active():
+            return
+        if len(self.update_actions) > 0:
+            self.progressbar.set_fraction(1.0/ float(len(self.update_actions)))
+            changed, destination, dir_two, k, source = self.update_actions.pop()
+            update_one(changed, destination, dir_two, k, source)
+        else:
+            self._update_second_cache_and_compare()
+            self.pending_action = ''
 
-            if source_files_count == len(self.dir_one):
-                self.source_stats.set_text(f"{len(self.dir_one)} fichiers, {sum_mb(self.dir_one)}")
-                update_cache(self.dir_one_path, self.dir_one)
-                self.source_files = []
-                self.source_chunk_count = 0
+    def batch_restore(self):
+        if self.simulate_checkbox.get_active():
+            return
+        if len(self.restore_actions) > 0:
+            self.progressbar.set_fraction(1.0/ float(len(self.restore_actions)))
+            changed, destination, dir_one, k, source = self.restore_actions.pop()
+            restore_one(changed, destination, dir_one, k, source)
+        else:
+            self._update_first_cache_and_compare()
+            self.pending_action = ''
 
-            if destination_files_count == len(self.dir_two):
-                self.dest_stats.set_text(f"{len(self.dir_two)} fichiers, {sum_mb(self.dir_two)}")
-                update_cache(self.dir_two_path, self.dir_two)
-                self.destination_files = []
-                self.destination_chunk_count = 0
+    def batch_move(self):
+        if self.simulate_checkbox.get_active():
+            return
+        if len(self.move_actions) > 0:
+            self.progressbar.set_fraction(1.0/ float(len(self.move_actions)))
+            d2, dest_dir, dir_one_path, dir_two, k, new_path, old_path = self.move_actions.pop()
+            move_one(dest_dir, new_path, old_path)
+            update_dir_two(d2, dir_one_path, self.dir_two, k, new_path)
+        else:
+            cleanup_empty_dirs(self.dir_two_path, True)
+            self._update_second_cache_and_compare()
+            self.pending_action = ''
 
-            if source_files_count == len(self.dir_one) and destination_files_count == len(self.dir_two):
-                self.compare()
+    def batch_remove(self):
+        if self.simulate_checkbox.get_active():
+            return
+        if len(self.remove_actions) > 0:
+            self.progressbar.set_fraction(1.0/ float(len(self.remove_actions)))
+            d, dir_two, k = self.remove_actions.pop()
+            remove_one(d, dir_two, k)
+        else:
+            cleanup_empty_dirs(self.dir_two_path, True)
+            self._update_second_cache_and_compare()
+            self.pending_action = ''
+
+    def on_timeout(self, user_data):
+        if self.pending_action == '':
+            self.spinner.stop()
+        if self.pending_action == 'INDEX':
+            self.spinner.start()
+            self.batch_index()
+        elif self.pending_action == 'ADD':
+            self.spinner.start()
+            self.batch_add()
+        elif self.pending_action == 'UPDATE':
+            self.spinner.start()
+            self.batch_update()
+        elif self.pending_action == 'RESTORE':
+            self.spinner.start()
+            self.batch_restore()
+        elif self.pending_action == 'MOVE':
+            self.spinner.start()
+            self.batch_move()
+        elif self.pending_action == 'REMOVE':
+            self.spinner.start()
+            self.batch_remove()
         else:
             self.progressbar.set_fraction(0.0)
         return True
@@ -309,23 +398,23 @@ Quitter: quitter l'application.
             self.compare()
 
     def _chk_print_to_file(self, file_descriptor):
-        if self.confirm is None:
+        if self.simulate_checkbox.get_active():
             sys.stdout = file_descriptor
 
     def _update_first_cache_and_compare(self):
-        if self.confirm is not None:
+        if not self.simulate_checkbox.get_active():
             self.dir_one = update_cache_and_reload(self.dir_one_path, self.dir_one)
             self.index_source()
             self.compare()
 
     def _update_second_cache_and_compare(self):
-        if self.confirm is not None:
+        if not self.simulate_checkbox.get_active():
             self.dir_two = update_cache_and_reload(self.dir_two_path, self.dir_two)
             self.index_destination()
             self.compare()
 
     def _print_script_location(self, file):
-        if self.confirm is None:
+        if self.simulate_checkbox.get_active():
             print(f"script will be in file {file}")
 
     def on_move_btn_clicked(self, widget):
@@ -334,11 +423,11 @@ Quitter: quitter l'application.
             original_stdout = sys.stdout
             with open('move.sh', 'w') as f:
                 self._chk_print_to_file(f)
-                move(self.moved, self.dir_one_path, self.dir_two_path, self.dir_two, self.confirm)
-                cleanup_empty_dirs(self.dir_two_path, self.confirm)
+                actions = move(self.moved, self.dir_one_path, self.dir_two_path, self.dir_two, self.simulate_checkbox)
                 self._chk_print_to_file(original_stdout)
-
-            self._update_second_cache_and_compare()
+            if not self.simulate_checkbox.get_active():
+                self.move_actions = actions
+                self.pending_action = 'MOVE'
 
     def on_add_btn_clicked(self, widget):
         if len(self.added) > 0:
@@ -346,11 +435,11 @@ Quitter: quitter l'application.
             original_stdout = sys.stdout
             with open('add.sh', 'w') as f:
                 self._chk_print_to_file(f)
-                add(self.added, self.dir_one_path, self.dir_two_path, self.dir_two, self.confirm)
+                actions = add(self.added, self.dir_one_path, self.dir_two_path, self.dir_two, False)
                 self._chk_print_to_file(original_stdout)
-                self._chk_print_to_file(original_stdout)
-
-            self._update_second_cache_and_compare()
+            if not self.simulate_checkbox.get_active():
+                self.add_actions = actions
+                self.pending_action = 'ADD'
 
     def on_update_btn_clicked(self, widget):
         if len(self.changed_in_one) > 0:
@@ -358,10 +447,11 @@ Quitter: quitter l'application.
             original_stdout = sys.stdout
             with open('update.sh', 'w') as f:
                 self._chk_print_to_file(f)
-                update(self.changed_in_one, self.dir_two, self.confirm)
+                actions = update(self.changed_in_one, self.dir_two, False)
                 self._chk_print_to_file(original_stdout)
-
-            self._update_second_cache_and_compare()
+            if not self.simulate_checkbox.get_active():
+                self.update_actions = actions
+                self.pending_action = 'UPDATE'
 
     def on_restore_btn_clicked(self, widget):
         if len(self.changed_in_two) > 0:
@@ -369,10 +459,11 @@ Quitter: quitter l'application.
             original_stdout = sys.stdout
             with open('restore.sh', 'w') as f:
                 self._chk_print_to_file(f)
-                restore(self.changed_in_two, self.dir_one, self.confirm)
+                actions = restore(self.changed_in_two, self.dir_one, False)
                 self._chk_print_to_file(original_stdout)
-
-            self._update_first_cache_and_compare()
+            if not self.simulate_checkbox.get_active():
+                self.restore_actions = actions
+                self.pending_action = 'RESTORE'
 
     def on_remove_btn_clicked(self, widget):
         if len(self.removed) > 0:
@@ -380,11 +471,11 @@ Quitter: quitter l'application.
             original_stdout = sys.stdout
             with open('remove.sh', 'w') as f:
                 self._chk_print_to_file(f)
-                remove(self.removed, self.dir_two, self.confirm)
-                cleanup_empty_dirs(self.dir_two_path, self.confirm)
+                actions = remove(self.removed, self.dir_two, False)
                 self._chk_print_to_file(original_stdout)
-
-            self._update_second_cache_and_compare()
+            if not self.simulate_checkbox.get_active():
+                self.remove_actions = actions
+                self.pending_action = 'REMOVE'
 
     def on_cleanup_indices_btn_clicked(self, widget):
         remove_cache(self.dir_one_path)
@@ -410,6 +501,7 @@ Quitter: quitter l'application.
             print('dir_one:', len(self.dir_one))
             self.source_stats.set_text(f"{len(self.dir_one)} fichiers, {sum_mb(self.dir_one)}")
         else:
+            self.pending_action = 'INDEX'
             self.source_files = scan_directories(self.dir_one_path)
             print('dir_one:', len( self.source_files))
             #self.source_stats.set_text(f"{len(self.source_files)} fichiers")
@@ -421,6 +513,7 @@ Quitter: quitter l'application.
             print('dir_two:', len(self.dir_two))
             self.dest_stats.set_text(f"{len(self.dir_two)} fichiers, {sum_mb(self.dir_two)}")
         else:
+            self.pending_action = 'INDEX'
             self.destination_files = scan_directories(self.dir_two_path)
             print('dir_two:', len(self.destination_files), "\n")
             #self.dest_stats.set_text(f"{len(self.destination_files)} fichiers")
@@ -467,9 +560,6 @@ Quitter: quitter l'application.
         print('removed:', len(self.removed), sum_mb(self.removed), "\n")
         self.removed_stats.set_text(f"{len(self.removed)} fichiers, {sum_mb(self.removed)}")
 
-        self.on_simulate_button_toggled(self.simulate,"1")
-        self.simulate.set_active(True)
-
     def cleanup_stats(self):
         self.source_stats.set_text('')
         self.dest_stats.set_text('')
@@ -489,20 +579,17 @@ Quitter: quitter l'application.
         self.changed_in_two = {}
         self.unchanged = {}
 
-
-
-win = FileChooserWindow()
-
-
 def cleanup_and_make_path_absolute(field, path):
     path = make_path_absolute(path)
     cleaned = remove_trailing_slash(path)
     field.set_text(cleaned)
 
-if len(sys.argv) > 1 and sys.argv[1] is not None:
-    cleanup_and_make_path_absolute(win.source,sys.argv[1])
-if len(sys.argv) > 2 and sys.argv[2] is not None:
-    cleanup_and_make_path_absolute(win.destination, sys.argv[2])
-win.connect("destroy", Gtk.main_quit)
-win.show_all()
-Gtk.main()
+if __name__ == '__main__':
+    win = FileChooserWindow()
+    if len(sys.argv) > 1 and sys.argv[1] is not None:
+        cleanup_and_make_path_absolute(win.source,sys.argv[1])
+    if len(sys.argv) > 2 and sys.argv[2] is not None:
+        cleanup_and_make_path_absolute(win.destination, sys.argv[2])
+    win.connect("destroy", Gtk.main_quit)
+    win.show_all()
+    Gtk.main()

@@ -36,7 +36,7 @@ def remove_prefix(str, substring):
 
 def make_dest_directory(dest_dir):
     if not os.path.isdir(dest_dir):
-        print(f"Creating destination directory {dest_dir}")
+        print(f"# Creating destination directory {dest_dir}")
         os.makedirs(dest_dir, exist_ok=True)
 
 
