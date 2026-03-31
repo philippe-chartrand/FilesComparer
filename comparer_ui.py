@@ -17,8 +17,8 @@ from gi.repository import Gtk, GLib
 
 
 class FileChooserWindow(Gtk.Window):
-    TIMEOUT = 3000
-    BATCH_SIZE = 90
+    TIMEOUT = 1000
+    BATCH_SIZE = 30
     def __init__(self):
         super().__init__(title="Comparaison d'ensembles de fichiers")
 
@@ -170,52 +170,58 @@ class FileChooserWindow(Gtk.Window):
         else:
             print("Actions are effective")
 
-    def _calc_progressbar_ratio(self, destination_files_count, source_files_count):
-        if source_files_count > 0 and destination_files_count == 0:
-            numer = len(self.dir_one)
-            denom = source_files_count
-        elif source_files_count == 0 and destination_files_count > 0:
-            numer = len(self.dir_two)
-            denom = destination_files_count
-        else:
-            numer = len(self.dir_one) + len(self.dir_two)
-            denom = source_files_count + destination_files_count
-        frac = float(numer) / float(denom)
+    def _calc_progressbar_ratio(self, count, dir):
+        frac = float(len(dir)) / float(count)
         return frac
 
-    def batch_index(self):
-        source_files_count = len(self.source_files)
-        destination_files_count = len(self.destination_files)
+    def batch_index_source(self):
         size = self.BATCH_SIZE
+        source_files_count = len(self.source_files)
+
         if source_files_count > 0:
             before = datetime.datetime.now()
             self.source_chunk_count, self.dir_one = self.process_chunk(size, self.source_files, self.source_chunk_count,
                                                                        self.dir_one, self.dir_one_path)
             duration = datetime.datetime.now() - before
-            frac = self._calc_progressbar_ratio(destination_files_count, source_files_count)
+            frac = self._calc_progressbar_ratio(source_files_count, self.dir_one)
             self.progressbar.set_fraction(frac)
             print(
                 f"     source: {len(self.dir_one)}/{source_files_count} {duration.microseconds / 1000:.0f} ms {frac:.0%}")
+        else:
+            self.pending_action = '' if self.pending_action == 'INDEX_SOURCE' else None
+        if source_files_count == len(self.dir_one) and len(self.dir_two) == 0:
+            self.source_stats.set_text(f"{len(self.dir_one)} fichiers, {sum_mb(self.dir_one)}")
+            update_cache(self.dir_one_path, self.dir_one)
+            self.source_files = []
+            self.source_chunk_count = 0
+            self.index_destination()
+
+        if source_files_count == len(self.dir_one):
+            self.compare()
+            self.on_simulate_button_toggled(self.simulate_checkbox, "1")
+            self.simulate_checkbox.set_active(True)
+
+    def batch_index_destination(self):
+        size = self.BATCH_SIZE
+        destination_files_count = len(self.destination_files)
         if destination_files_count > 0:
             before = datetime.datetime.now()
             self.destination_chunk_count, self.dir_two = self.process_chunk(size, self.destination_files,
                                                                             self.destination_chunk_count, self.dir_two,
                                                                             self.dir_two_path)
             duration = datetime.datetime.now() - before
-            frac = self._calc_progressbar_ratio(destination_files_count, source_files_count)
+            frac = self._calc_progressbar_ratio(destination_files_count, self.dir_two)
+            self.progressbar.set_fraction(frac)
             print(
                 f"destination: {len(self.dir_two)}/{destination_files_count} {duration.microseconds / 1000:.0f} ms {frac:.0%}\n")
-        if source_files_count == len(self.dir_one):
-            self.source_stats.set_text(f"{len(self.dir_one)} fichiers, {sum_mb(self.dir_one)}")
-            update_cache(self.dir_one_path, self.dir_one)
-            self.source_files = []
-            self.source_chunk_count = 0
+        else:
+            self.pending_action = '' if self.pending_action == 'INDEX_DESTINATION' else None
         if destination_files_count == len(self.dir_two):
             self.dest_stats.set_text(f"{len(self.dir_two)} fichiers, {sum_mb(self.dir_two)}")
             update_cache(self.dir_two_path, self.dir_two)
             self.destination_files = []
             self.destination_chunk_count = 0
-        if source_files_count == len(self.dir_one) and destination_files_count == len(self.dir_two):
+        if destination_files_count == len(self.dir_two):
             self.compare()
             self.on_simulate_button_toggled(self.simulate_checkbox, "1")
             self.simulate_checkbox.set_active(True)
@@ -279,24 +285,29 @@ class FileChooserWindow(Gtk.Window):
             self.pending_action = ''
 
     def on_timeout(self, user_data):
-        if self.pending_action == '':
+        pending_action = self.pending_action
+        if pending_action == '':
             self.spinner.stop()
-        if self.pending_action == 'INDEX':
+
+        if pending_action == 'INDEX_SOURCE':
             self.spinner.start()
-            self.batch_index()
-        elif self.pending_action == 'ADD':
+            self.batch_index_source()
+        elif pending_action == 'INDEX_DESTINATION':
+            self.spinner.start()
+            self.batch_index_destination()
+        elif pending_action == 'ADD':
             self.spinner.start()
             self.batch_add()
-        elif self.pending_action == 'UPDATE':
+        elif pending_action == 'UPDATE':
             self.spinner.start()
             self.batch_update()
-        elif self.pending_action == 'RESTORE':
+        elif pending_action == 'RESTORE':
             self.spinner.start()
             self.batch_restore()
-        elif self.pending_action == 'MOVE':
+        elif pending_action == 'MOVE':
             self.spinner.start()
             self.batch_move()
-        elif self.pending_action == 'REMOVE':
+        elif pending_action == 'REMOVE':
             self.spinner.start()
             self.batch_remove()
         else:
@@ -393,9 +404,8 @@ Quitter: quitter l'application.
         dialog.destroy()
 
     def on_index_folders_btn_clicked(self, widget):
-        if self.source.get_text() != '' and self.destination.get_text != '':
-            self.index()
-            self.compare()
+        if self.source.get_text() != '':
+            self.index_source()
 
     def _chk_print_to_file(self, file_descriptor):
         if self.simulate_checkbox.get_active():
@@ -486,25 +496,17 @@ Quitter: quitter l'application.
         self.dir_two = {}
         self.cleanup_stats()
 
-    def index(self):
-        self.dir_one_path = self.source.get_text()
-        self.dir_two_path = self.destination.get_text()
-        self.index_source()
-        self.index_destination()
-        if len(self.dir_one) > 0 and len(self.dir_two) > 0:
-            self.compare()
-
     def index_source(self):
         self.dir_one_path = self.source.get_text()
         if can_read_from_cache(self.dir_one_path):
             self.dir_one = get_files(self.dir_one_path)
             print('dir_one:', len(self.dir_one))
             self.source_stats.set_text(f"{len(self.dir_one)} fichiers, {sum_mb(self.dir_one)}")
+            self.index_destination()
         else:
-            self.pending_action = 'INDEX'
+            self.pending_action = 'INDEX_SOURCE'
             self.source_files = scan_directories(self.dir_one_path)
             print('dir_one:', len( self.source_files))
-            #self.source_stats.set_text(f"{len(self.source_files)} fichiers")
 
     def index_destination(self):
         self.dir_two_path = self.destination.get_text()
@@ -512,11 +514,11 @@ Quitter: quitter l'application.
             self.dir_two = get_files(self.dir_two_path)
             print('dir_two:', len(self.dir_two))
             self.dest_stats.set_text(f"{len(self.dir_two)} fichiers, {sum_mb(self.dir_two)}")
+            self.compare()
         else:
-            self.pending_action = 'INDEX'
+            self.pending_action = 'INDEX_DESTINATION'
             self.destination_files = scan_directories(self.dir_two_path)
             print('dir_two:', len(self.destination_files), "\n")
-            #self.dest_stats.set_text(f"{len(self.destination_files)} fichiers")
 
     def process_chunk(self, size, files, chunk_count, dir, path):
         if len(files) > 0:
