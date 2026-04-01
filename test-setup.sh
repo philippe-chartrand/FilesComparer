@@ -1,33 +1,83 @@
 #!/bin/bash
-# Saving /home/philippe/Dev/FilesComparer/A infos to cache b4e8bfaa25fa562fc9ae580031999186
-# Saving /home/philippe/Dev/FilesComparer/B infos to cache 15f9d924422f48ba9df8ee750ed3951a
-rm b4e8bfaa25fa562fc9ae580031999186
-rm 15f9d924422f48ba9df8ee750ed3951a
-git checkout A/moved/same.txt
-git checkout A/changed-in-destination.txt
-git checkout A/changed-in-source.txt
-git checkout A/new.txt
-git checkout A/same.txt
-git checkout A/same/fichier*txt
 
-git checkout B/to-be-moved/same.txt
-git checkout B/changed-in-destination.txt
-git checkout B/changed-in-source.txt
-git checkout B/old.txt
-git checkout B/same.txt
-git checkout B/same/fichier*txt
+# setup
 
-touch A/changed-in-source.txt
-touch B/changed-in-destination.txt
+./comparer.py A B cleanup 1>/dev/null 2>/dev/null
 
-rm B/new.txt 2>/dev/null
-rm B/moved/same.txt 2>/dev/null
-rmdir B/moved 2>/dev/null
+git checkout A/moved/same.txt 2>/dev/null
+git checkout A/changed-in-destination.txt 2>/dev/null
+git checkout A/changed-in-source.txt 2>/dev/null
+git checkout A/new.txt 2>/dev/null
+git checkout A/same.txt 2>/dev/null
+git checkout A/same/fichier*txt 2>/dev/null
 
-wc -l  add.sh move.sh update.sh restore.sh remove.sh
-#  1 add.sh
-#  1 move.sh
-#  3 update.sh
-#  4 restore.sh
-#  1 remove.sh
-# 10 total
+git checkout B/to-be-moved/same.txt 2>/dev/null
+git checkout B/changed-in-destination.txt 2>/dev/null
+git checkout B/changed-in-source.txt 2>/dev/null
+git checkout B/old.txt 2>/dev/null
+git checkout B/same.txt 2>/dev/null
+git checkout B/same/fichier*txt 2>/dev/null
+
+
+touch A/changed-in-source.txt 2>/dev/null
+touch B/changed-in-destination.txt 2>/dev/null
+
+rm B/new.txt 2>/dev/null 2>/dev/null
+rm B/moved/same.txt 2>/dev/null 2>/dev/null
+rmdir B/moved 2>/dev/null 2>/dev/null
+
+# tests
+
+init=$(./comparer.py A B| grep -c ' files scanned')
+a=$(./comparer.py A B| grep -e '^unchanged:')
+b=$(./comparer.py A B add true |grep 'added:')
+c=$(./comparer.py A B move true |grep -e '^moved:')
+d=$(./comparer.py A B update true | grep 'source:')
+e=$(./comparer.py A B restore true| grep 'destination:')
+f=$(./comparer.py A B remove true| grep -e '^removed:')
+g=$(./comparer.py A B| grep -e '^unchanged:')
+h=$(./comparer.py A B cleanup |grep -c 'Removing')
+
+a=$(echo $a|cut -f2 -d:|cut -f2 -d' ')
+b=$(echo $b|cut -f2 -d:|cut -f2 -d' ')
+c=$(echo $c|cut -f2 -d:|cut -f2 -d' ')
+d=$(echo $d|cut -f2 -d:|cut -f2 -d' ')
+e=$(echo $e|cut -f2 -d:|cut -f2 -d' ')
+f=$(echo $f|cut -f2 -d:|cut -f2 -d' ')
+g=$(echo $g|cut -f2 -d:|cut -f2 -d' ')
+
+if [[ $init -eq 2 ]]; then
+    echo "indexing ok"
+fi
+if [[ $a -eq 102 ]]; then
+    echo "unchanged ok"
+fi
+if [[ $b -eq 1 ]]; then
+    echo "add ok"
+fi
+if [[ $c -eq 1 ]]; then
+    echo "move ok"
+fi
+if [[ $d -eq 1 ]]; then
+    echo "update ok"
+fi
+if [[ $e -eq 1 ]]; then
+    echo "restore ok"
+fi
+if [[ $f -eq 1 ]]; then
+    echo "remove ok"
+fi
+
+if [[ $g -eq 106 ]]; then
+    echo "all ok"
+fi
+
+if [[ $h -eq 2 ]]; then
+    echo "cleanup ok"
+fi
+
+# teardown
+git restore A/changed-in-destination.txt 2>/dev/null
+git restore B/changed-in-source.txt 2>/dev/null
+git restore B/old.txt 2>/dev/null
+git restore B/to-be-moved/same.txt 2>/dev/null
