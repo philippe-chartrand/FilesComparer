@@ -47,33 +47,33 @@ f=$(echo $f|cut -f2 -d:|cut -f2 -d' ')
 g=$(echo $g|cut -f2 -d:|cut -f2 -d' ')
 
 if [[ $init -eq 2 ]]; then
-    echo "indexing ok"
+    echo "indexing ok ($init)"
 fi
 if [[ $a -eq 102 ]]; then
-    echo "unchanged ok"
+    echo "unchanged ok ($a)"
 fi
 if [[ $b -eq 1 ]]; then
-    echo "add ok"
+    echo "add ok ($b)"
 fi
 if [[ $c -eq 1 ]]; then
-    echo "move ok"
+    echo "move ok ($c)"
 fi
 if [[ $d -eq 1 ]]; then
-    echo "update ok"
+    echo "update ok ($d)"
 fi
 if [[ $e -eq 1 ]]; then
-    echo "restore ok"
+    echo "restore ok ($e)"
 fi
 if [[ $f -eq 1 ]]; then
-    echo "remove ok"
+    echo "remove ok ($f)"
 fi
 
 if [[ $g -eq 106 ]]; then
-    echo "all ok"
+    echo "all ok ($g)"
 fi
 
 if [[ $h -eq 2 ]]; then
-    echo "cleanup ok"
+    echo "cleanup ok ($h)"
 fi
 
 # teardown
