@@ -211,7 +211,7 @@ class FileChooserWindow(Gtk.Window):
             frac = self._calc_progressbar_ratio(destination_files_count, self.dir_two)
             self.progressbar.set_fraction(frac)
             print(
-                f"destination: {len(self.dir_two)}/{destination_files_count} {duration.microseconds / 1000:.0f} ms {frac:.0%}\n")
+                f"destination: {len(self.dir_two)}/{destination_files_count} {duration.microseconds / 1000:.0f} ms {frac:.0%}")
         else:
             self.pending_action = '' if self.pending_action == 'INDEX_DESTINATION' else None
         if destination_files_count == len(self.dir_two):
