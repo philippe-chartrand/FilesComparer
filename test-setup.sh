@@ -68,18 +68,18 @@ function tests(){
   g=$(echo $g|cut -f2 -d:|cut -f2 -d' ')
 
   assert $init1 106 dir_one
-  assert $init2 106 "dir two after add"
+  assert $init2 106 dir_two
   assert $init 2 indexing
   assert $a 102 unchanged
 
   assert $b 1 add
-  assert $b2 107 dir_two
+  assert $b2 107 "dir_two after add"
 
   assert $c 1  move
   assert $d 1  update
   assert $e 1  restore
   assert $f 1  remove
-  assert $f2 106 "dir two after remove"
+  assert $f2 106 "dir_two after remove"
 
   assert $g 106  all
   assert $h 2  cleanup
