@@ -77,6 +77,10 @@ def add(to_add, dir_one_path, dir_two_path, dir_two, execute_now):
 def add_one(d, dest_dir, dir_two, k):
     make_dest_directory(dest_dir)
     shutil.copy2(d['path'], dest_dir)
+    add_update_cache_one(d, dest_dir, dir_two, k)
+
+
+def add_update_cache_one(d, dest_dir, dir_two, k):
     dir_two[k] = d.copy()
     dir_two[k]['path'] = Path(f"{dest_dir}/{k}")
 
