@@ -137,7 +137,7 @@ def get_files(dir_path):
                                                                      mtime=os.stat(p).st_mtime)
                 if (i == feedback_every or i % feedback_every == 0):
                     sys.stdout.write(f"\r{i}")
-        sys.stdout.write(f"\r{i} files scanned")
+        sys.stdout.write(f"\r{i+1} files scanned")
         sys.stdout.flush()
         print()
         save_to_cache(dir_path, cache_file_path, dir_files)
