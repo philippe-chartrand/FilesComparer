@@ -35,7 +35,12 @@ if __name__ == '__main__':
     dir_two_path = remove_trailing_slash(make_path_absolute(sys.argv[2]))
     action = sys.argv[3] if len(sys.argv)> 3 else None
     confirm = True if len(sys.argv)> 4 else None
-            
+
+    if action == 'cleanup':
+        remove_cache(dir_one_path)
+        remove_cache(dir_two_path)
+        sys.exit()
+
     dir_one = get_files(dir_one_path)
     print('dir_one:', len(dir_one), sum_mb(dir_one))
     dir_two = get_files(dir_two_path)
@@ -85,10 +90,6 @@ if __name__ == '__main__':
             restore(changed_in_two, dir_one, confirm)
             if confirm:
                 update_cache(dir_one_path, dir_one)
-            
-        elif action == 'cleanup':
-            remove_cache(dir_one_path)
-            remove_cache(dir_two_path)
             
         if confirm:
             if action == 'restore':
