@@ -3,10 +3,10 @@ import datetime
 import sys
 import gi
 
-from comparelib.actions import cleanup_empty_dirs, move, remove, restore, update, add, add_one, update_one, restore_one, \
-    move_one, update_dir_two, remove_one
-from comparelib.cache import get_files, update_cache, remove_cache, scan_directories, \
-    can_read_from_cache, get_files_paginated, update_cache_and_reload
+from comparelib.actions import move, remove, restore, update, add
+from comparelib.batch_actions import BatchActions
+from comparelib.cache import get_files, remove_cache, scan_directories, \
+    can_read_from_cache, update_cache_and_reload
 from comparelib.comparisons import minus, find_moved, intersection, modified
 from comparelib.utilities import sum_mb, choose_first, remove_trailing_slash, make_path_absolute
 
@@ -16,10 +16,10 @@ from gi.repository import Gtk, GLib
 
 class FileChooserWindow(Gtk.Window):
     TIMEOUT = 1000
-    BATCH_SIZE = 30
-    def __init__(self):
-        super().__init__(title="Comparaison d'ensembles de fichiers")
-
+    def __init__(self, batch):
+        super().__init__()
+        self.batch = batch
+        self.set_title("Comparaison d'ensembles de fichiers")
         set_src_btn = Gtk.Button(label="Choisissez le répertoire source")
         set_src_btn.connect("clicked", self.on_src_btn_clicked)
 
@@ -61,13 +61,6 @@ class FileChooserWindow(Gtk.Window):
         self.changed_in_one = {}
         self.changed_in_two = {}
         self.unchanged = {}
-
-        self.add_actions = []
-        self.update_actions = []
-        self.restore_actions = []
-        self.move_actions = []
-        self.remove_actions = []
-        self.pending_action = ''
 
         add_btn, cleanup_btn, help_btn, move_btn, quit_btn, remove_btn, restore_btn, update_btn = self._buttons()
 
@@ -172,142 +165,74 @@ class FileChooserWindow(Gtk.Window):
         frac = float(len(dir)) / float(count)
         return frac
 
-    def batch_index_source(self):
-        size = self.BATCH_SIZE
-        source_files_count = len(self.source_files)
-
-        if source_files_count > 0:
-            before = datetime.datetime.now()
-            self.source_chunk_count, self.dir_one = self.process_chunk(size, self.source_files, self.source_chunk_count,
-                                                                       self.dir_one, self.dir_one_path)
-            duration = datetime.datetime.now() - before
-            frac = self._calc_progressbar_ratio(source_files_count, self.dir_one)
-            self.progressbar.set_fraction(frac)
-            print(
-                f"     source: {len(self.dir_one)}/{source_files_count} {duration.microseconds / 1000:.0f} ms {frac:.0%}")
-        else:
-            self.pending_action = '' if self.pending_action == 'INDEX_SOURCE' else None
-        if source_files_count == len(self.dir_one) and len(self.dir_two) == 0:
-            self.source_stats.set_text(f"{len(self.dir_one)} fichiers, {sum_mb(self.dir_one)}")
-            update_cache(self.dir_one_path, self.dir_one)
-            self.source_files = []
-            self.source_chunk_count = 0
-            self.index_destination()
-
-        if source_files_count == len(self.dir_one):
-            self.compare()
-            self.on_simulate_button_toggled(self.simulate_checkbox, "1")
-            self.simulate_checkbox.set_active(True)
-
-    def batch_index_destination(self):
-        size = self.BATCH_SIZE
-        destination_files_count = len(self.destination_files)
-        if destination_files_count > 0:
-            before = datetime.datetime.now()
-            self.destination_chunk_count, self.dir_two = self.process_chunk(size, self.destination_files,
-                                                                            self.destination_chunk_count, self.dir_two,
-                                                                            self.dir_two_path)
-            duration = datetime.datetime.now() - before
-            frac = self._calc_progressbar_ratio(destination_files_count, self.dir_two)
-            self.progressbar.set_fraction(frac)
-            print(
-                f"destination: {len(self.dir_two)}/{destination_files_count} {duration.microseconds / 1000:.0f} ms {frac:.0%}")
-        else:
-            self.pending_action = '' if self.pending_action == 'INDEX_DESTINATION' else None
-        if destination_files_count == len(self.dir_two):
-            self.dest_stats.set_text(f"{len(self.dir_two)} fichiers, {sum_mb(self.dir_two)}")
-            update_cache(self.dir_two_path, self.dir_two)
-            self.destination_files = []
-            self.destination_chunk_count = 0
-        if destination_files_count == len(self.dir_two):
-            self.compare()
-            self.on_simulate_button_toggled(self.simulate_checkbox, "1")
-            self.simulate_checkbox.set_active(True)
-
-    def batch_add(self):
-        if self.simulate_checkbox.get_active():
-            return
-        if len(self.add_actions) > 0:
-            self.progressbar.set_fraction(1.0/ float(len(self.add_actions)))
-            d, dest_dir, dir_two, k = self.add_actions.pop()
-            add_one(d, dest_dir, dir_two, k)
-        else:
-            self._update_second_cache_and_compare()
-            self.pending_action = ''
-
-    def batch_update(self):
-        if self.simulate_checkbox.get_active():
-            return
-        if len(self.update_actions) > 0:
-            self.progressbar.set_fraction(1.0/ float(len(self.update_actions)))
-            changed, destination, dir_two, k, source = self.update_actions.pop()
-            update_one(changed, destination, dir_two, k, source)
-        else:
-            self._update_second_cache_and_compare()
-            self.pending_action = ''
-
-    def batch_restore(self):
-        if self.simulate_checkbox.get_active():
-            return
-        if len(self.restore_actions) > 0:
-            self.progressbar.set_fraction(1.0/ float(len(self.restore_actions)))
-            changed, destination, dir_one, k, source = self.restore_actions.pop()
-            restore_one(changed, destination, dir_one, k, source)
-        else:
-            self._update_first_cache_and_compare()
-            self.pending_action = ''
-
-    def batch_move(self):
-        if self.simulate_checkbox.get_active():
-            return
-        if len(self.move_actions) > 0:
-            self.progressbar.set_fraction(1.0/ float(len(self.move_actions)))
-            d2, dest_dir, dir_one_path, dir_two, k, new_path, old_path = self.move_actions.pop()
-            move_one(dest_dir, new_path, old_path)
-            update_dir_two(d2, dir_one_path, self.dir_two, k, new_path)
-        else:
-            cleanup_empty_dirs(self.dir_two_path, True)
-            self._update_second_cache_and_compare()
-            self.pending_action = ''
-
-    def batch_remove(self):
-        if self.simulate_checkbox.get_active():
-            return
-        if len(self.remove_actions) > 0:
-            self.progressbar.set_fraction(1.0/ float(len(self.remove_actions)))
-            d, dir_two, k = self.remove_actions.pop()
-            remove_one(d, dir_two, k)
-        else:
-            cleanup_empty_dirs(self.dir_two_path, True)
-            self._update_second_cache_and_compare()
-            self.pending_action = ''
-
     def on_timeout(self, user_data):
-        pending_action = self.pending_action
+        pending_action = self.batch.pending_action
         if pending_action == '':
             self.spinner.stop()
 
         if pending_action == 'INDEX_SOURCE':
             self.spinner.start()
-            self.batch_index_source()
+            print(pending_action)
+            frac, self.dir_one, self.source_files, done = self.batch.index_source(self.source_files, self.dir_one, self.dir_one_path, self.source_stats, len(self.dir_two))
+            self.progressbar.set_fraction(frac)
+            if done:
+                self.index_destination()
+
         elif pending_action == 'INDEX_DESTINATION':
             self.spinner.start()
-            self.batch_index_destination()
+            print(pending_action)
+            frac, self.dir_two, self.destination_files, done = self.batch.index_destination(self.destination_files, self.dir_two, self.dir_two_path, self.dest_stats)
+            self.progressbar.set_fraction(frac)
+            if done:
+                self.batch.pending_action = 'COMPARE'
+                self.on_simulate_button_toggled(self.simulate_checkbox, "1")
+                self.simulate_checkbox.set_active(True)
+
+        elif pending_action == 'COMPARE':
+            print(pending_action)
+            self.compare()
+
         elif pending_action == 'ADD':
             self.spinner.start()
-            self.batch_add()
+            print(pending_action)
+            frac, done, _ = self.batch.add(self.dir_two)
+            self.progressbar.set_fraction(frac)
+            if done:
+                self._update_second_cache_and_compare()
+
+
         elif pending_action == 'UPDATE':
             self.spinner.start()
-            self.batch_update()
+            print(pending_action)
+            frac, done, self.dir_two = self.batch.update(self.dir_two)
+            self.progressbar.set_fraction(frac)
+            if done:
+                self._update_second_cache_and_compare()
+
         elif pending_action == 'RESTORE':
             self.spinner.start()
-            self.batch_restore()
+            print(pending_action)
+            frac, done, self.dir_one = self.batch.restore(self.dir_one)
+            self.progressbar.set_fraction(frac)
+            if done:
+                self._update_first_cache_and_compare()
+
         elif pending_action == 'MOVE':
             self.spinner.start()
-            self.batch_move()
+            print(pending_action)
+            frac, done = self.batch.move(self.dir_two_path)
+            self.progressbar.set_fraction(frac)
+            if done:
+                self._update_second_cache_and_compare()
+
         elif pending_action == 'REMOVE':
             self.spinner.start()
-            self.batch_remove()
+            print(pending_action)
+            frac, done, self.dir_two = self.batch.remove(self.dir_two, self.dir_two_path)
+            self.progressbar.set_fraction(frac)
+            if done:
+                self._update_second_cache_and_compare()
+
         else:
             self.progressbar.set_fraction(0.0)
         return True
@@ -402,7 +327,12 @@ Quitter: quitter l'application.
         dialog.destroy()
 
     def on_index_folders_btn_clicked(self, widget):
-        if self.source.get_text() != '':
+        if self.source_stats.get_text() != '' \
+            and self.dest_stats.get_text() != '' \
+            and len(self.dir_one) > 0 \
+            and len(self.dir_two) > 0:
+                self.compare()
+        elif self.source.get_text() != '':
             self.index_source()
 
     def _chk_print_to_file(self, file_descriptor):
@@ -411,79 +341,89 @@ Quitter: quitter l'application.
 
     def _update_first_cache_and_compare(self):
         if not self.simulate_checkbox.get_active():
-            self.dir_one = update_cache_and_reload(self.dir_one_path, self.dir_one)
-            self.index_source()
-            self.compare()
+            update_cache_and_reload(self.dir_one_path, self.dir_one)
+            self.source_stats.set_text(f"{len(self.dir_one)} fichiers, {sum_mb(self.dir_one)}")
+            self.batch.pending_action = 'COMPARE'
 
     def _update_second_cache_and_compare(self):
         if not self.simulate_checkbox.get_active():
-            self.dir_two = update_cache_and_reload(self.dir_two_path, self.dir_two)
-            self.index_destination()
-            self.compare()
+            update_cache_and_reload(self.dir_two_path, self.dir_two)
+            self.dest_stats.set_text(f"{len(self.dir_two)} fichiers, {sum_mb(self.dir_two)}")
+            self.batch.pending_action = 'COMPARE'
 
     def _print_script_location(self, file):
         if self.simulate_checkbox.get_active():
             print(f"script will be in file {file}")
 
     def on_move_btn_clicked(self, widget):
+        execute = False
+        print_to_file = self.simulate_checkbox.get_active()
         if len(self.moved) > 0:
             self._print_script_location("move.sh")
             original_stdout = sys.stdout
             with open('move.sh', 'w') as f:
                 self._chk_print_to_file(f)
-                actions = move(self.moved, self.dir_one_path, self.dir_two_path, self.dir_two, self.simulate_checkbox)
-                self._chk_print_to_file(original_stdout)
+                actions = move(self.moved, self.dir_one_path, self.dir_two_path, self.dir_two, execute, print_to_file)
+            self._chk_print_to_file(original_stdout)
             if not self.simulate_checkbox.get_active():
-                self.move_actions = actions
-                self.pending_action = 'MOVE'
+                self.batch.move_actions = actions
+                self.batch.pending_action = 'MOVE'
 
     def on_add_btn_clicked(self, widget):
+        execute = False
+        print_to_file = self.simulate_checkbox.get_active()
         if len(self.added) > 0:
             self._print_script_location("add.sh")
             original_stdout = sys.stdout
             with open('add.sh', 'w') as f:
                 self._chk_print_to_file(f)
-                actions = add(self.added, self.dir_one_path, self.dir_two_path, self.dir_two, False)
-                self._chk_print_to_file(original_stdout)
+                actions = add(self.added, self.dir_one_path, self.dir_two_path, self.dir_two, execute, print_to_file)
+            self._chk_print_to_file(original_stdout)
             if not self.simulate_checkbox.get_active():
-                self.add_actions = actions
-                self.pending_action = 'ADD'
+                self.batch.add_actions = actions
+                self.batch.pending_action = 'ADD'
 
     def on_update_btn_clicked(self, widget):
+        execute = False
+        print_to_file = self.simulate_checkbox.get_active()
         if len(self.changed_in_one) > 0:
             self._print_script_location("update.sh")
             original_stdout = sys.stdout
             with open('update.sh', 'w') as f:
                 self._chk_print_to_file(f)
-                actions = update(self.changed_in_one, self.dir_two, False)
-                self._chk_print_to_file(original_stdout)
+                actions = update(self.changed_in_one, self.dir_two,  execute, print_to_file)
+            self._chk_print_to_file(original_stdout)
             if not self.simulate_checkbox.get_active():
-                self.update_actions = actions
-                self.pending_action = 'UPDATE'
+                self.batch.update_actions = actions
+                self.batch.pending_action = 'UPDATE'
 
     def on_restore_btn_clicked(self, widget):
+        execute = False
+        print_to_file = self.simulate_checkbox.get_active()
         if len(self.changed_in_two) > 0:
             self._print_script_location("restore.sh")
             original_stdout = sys.stdout
             with open('restore.sh', 'w') as f:
                 self._chk_print_to_file(f)
-                actions = restore(self.changed_in_two, self.dir_one, False)
-                self._chk_print_to_file(original_stdout)
+                actions = restore(self.changed_in_two, self.dir_one,  execute, print_to_file)
+            self._chk_print_to_file(original_stdout)
             if not self.simulate_checkbox.get_active():
-                self.restore_actions = actions
-                self.pending_action = 'RESTORE'
+                self.batch.restore_actions = actions
+                self.batch.pending_action = 'RESTORE'
 
     def on_remove_btn_clicked(self, widget):
+        execute = False
+        print_to_file = self.simulate_checkbox.get_active()
         if len(self.removed) > 0:
             self._print_script_location("remove.sh")
             original_stdout = sys.stdout
             with open('remove.sh', 'w') as f:
                 self._chk_print_to_file(f)
-                actions = remove(self.removed, self.dir_two, False)
-                self._chk_print_to_file(original_stdout)
+                actions = remove(self.removed, self.dir_two,  execute, print_to_file)
+            self._chk_print_to_file(original_stdout)
             if not self.simulate_checkbox.get_active():
-                self.remove_actions = actions
-                self.pending_action = 'REMOVE'
+                self.batch.remove_actions = actions
+                self.batch.pending_action = 'REMOVE'
 
     def on_cleanup_indices_btn_clicked(self, widget):
         source_cache = self.dir_one_path if self.dir_one_path else self.source.get_text()
@@ -504,7 +444,7 @@ Quitter: quitter l'application.
             self.source_stats.set_text(f"{len(self.dir_one)} fichiers, {sum_mb(self.dir_one)}")
             self.index_destination()
         else:
-            self.pending_action = 'INDEX_SOURCE'
+            self.batch.pending_action = 'INDEX_SOURCE'
             self.source_files = scan_directories(self.dir_one_path)
             print('dir_one:', len( self.source_files))
 
@@ -514,26 +454,10 @@ Quitter: quitter l'application.
             self.dir_two = get_files(self.dir_two_path)
             print('dir_two:', len(self.dir_two))
             self.dest_stats.set_text(f"{len(self.dir_two)} fichiers, {sum_mb(self.dir_two)}")
-            self.compare()
         else:
-            self.pending_action = 'INDEX_DESTINATION'
+            self.batch.pending_action = 'INDEX_DESTINATION'
             self.destination_files = scan_directories(self.dir_two_path)
             print('dir_two:', len(self.destination_files), "\n")
-
-    def process_chunk(self, size, files, chunk_count, dir, path):
-        if len(files) > 0:
-            offset = chunk_count * size
-            if len(files) < size:
-                    size = len(files)
-
-            chunk = get_files_paginated(path, files, offset, size)
-            dir = {**dir, **chunk}
-
-            if len(files) > len(dir):
-                chunk_count = chunk_count + 1
-            # print(path, len(dir))
-
-        return chunk_count, dir
 
     def compare(self):
         self.removed = minus(self.dir_two, self.dir_one)
@@ -561,6 +485,7 @@ Quitter: quitter l'application.
 
         print('removed:', len(self.removed), sum_mb(self.removed), "\n")
         self.removed_stats.set_text(f"{len(self.removed)} fichiers, {sum_mb(self.removed)}")
+        self.batch.pending_action = ''
 
     def cleanup_stats(self):
         self.source_stats.set_text('')
@@ -587,7 +512,8 @@ def cleanup_and_make_path_absolute(field, path):
     field.set_text(cleaned)
 
 if __name__ == '__main__':
-    win = FileChooserWindow()
+    batch = BatchActions()
+    win = FileChooserWindow(batch)
     if len(sys.argv) > 1 and sys.argv[1] is not None:
         cleanup_and_make_path_absolute(win.source,sys.argv[1])
     if len(sys.argv) > 2 and sys.argv[2] is not None:
