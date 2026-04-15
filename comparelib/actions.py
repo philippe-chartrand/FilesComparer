@@ -190,7 +190,7 @@ def remove(deleted, dir_two, execute_now, print_action=True):
             else:
                 actions.append((d, dir_two, k))
         except:
-            print("Failed to unlink",d['path'].encode('utf-8', 'surrogateescape'))
+            print("Failed to unlink",str(d['path']).encode('utf-8', 'surrogateescape'))
             pass
     return actions
 
